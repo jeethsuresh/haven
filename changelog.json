@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "version": "0.1.0",
+  "versionCode": 1,
+  "changes": [
+    "Initial Haven media library for Android sources, desktop sinks, and web viewers.",
+    "Gallery discovery and direct backups run while Haven is open.",
+    "Originals stay on your devices; restrictive networks may need a different direct route."
+  ]
+}

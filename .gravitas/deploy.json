@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "app": "haven",
+  "namespace": "haven",
+  "host": "haven.gravitas.cool",
+  "port": 8080,
+  "health_path": "/healthz",
+  "image_repository": "ghcr.io/jeethsuresh/haven",
+  "cpu": "250m",
+  "memory": "256Mi",
+  "runtime_secret": "haven-runtime",
+  "storage": {
+    "size": "5Gi",
+    "mount": "/data"
+  },
+  "env": {
+    "HAVEN_APP_URL": "https://haven.gravitas.cool",
+    "GRAVITAS_ISSUER": "https://gravitas.cool",
+    "HAVEN_STUN_URLS": "stun:stun.cloudflare.com:3478"
+  },
+  "verify": [
+    {
+      "path": "/api/me",
+      "status": 401,
+      "cache_control_contains": "no-store"
+    }
+  ]
+}

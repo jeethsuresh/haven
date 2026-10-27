@@ -1,0 +1,185 @@
+name: Haven web and Android
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: haven-publish-${{ github.ref }}
+  cancel-in-progress: false
+  queue: max
+jobs:
+  backend:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.2'
+          cache: false
+      - run: go test -race ./... && go vet ./...
+        working-directory: backend
+      - name: Validate signing, changelog, and automatic version policy
+        run: |
+          python3 scripts/test-android-release.py
+          python3 scripts/test-ci-version.py
+          python3 scripts/android-release.py validate
+  client:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Install pinned Flutter
+        run: bash scripts/flutter-toolchain.sh
+      - working-directory: client
+        run: |
+          flutter pub get --enforce-lockfile
+          dart format --output=none --set-exit-if-changed lib test
+          flutter analyze
+          flutter test --no-pub
+          flutter build web --release --no-pub --no-web-resources-cdn
+  android:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+      - name: Install pinned Flutter
+        run: bash scripts/flutter-toolchain.sh
+      - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
+      - run: sdkmanager 'platforms;android-36' 'build-tools;35.0.0' 'ndk;27.0.12077973'
+      - name: Build native gallery adapter and data-channel client
+        working-directory: client
+        run: |
+          flutter pub get --enforce-lockfile
+          flutter build apk --debug --no-pub --dart-define=HAVEN_BACKEND=https://haven.gravitas.cool
+  image:
+    needs: [backend, client, android]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      digest: ${{ steps.image.outputs.digest }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and publish tested immutable image
+        id: image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc
+        with:
+          context: .
+          platforms: linux/amd64
+          push: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' }}
+          tags: ghcr.io/jeethsuresh/haven:${{ github.sha }}
+          labels: org.opencontainers.image.source=https://github.com/jeethsuresh/haven
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+  deploy:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment:
+      name: gravitas
+      url: https://haven.gravitas.cool
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Fetch pinned private deployment tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: jeethsuresh/gravitas-deploy
+          ref: a9d5a1533214ade9d85def35b05a2fe731ca6e3a
+          path: .gravitas-runtime
+          ssh-key: ${{ secrets.GRAVITAS_TOOLING_SSH_KEY }}
+          persist-credentials: false
+      - name: Deploy and verify Haven over HTTPS
+        uses: ./.gravitas-runtime
+        with:
+          config: .gravitas/deploy.json
+          image: ghcr.io/jeethsuresh/haven@${{ needs.image.outputs.digest }}
+          kubeconfig: ${{ secrets.GRAVITAS_KUBECONFIG }}
+  android-release:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: [backend, client, android, deploy]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    permissions:
+      contents: write
+    environment: android-release
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Allocate this push's immutable Android version
+        run: python3 scripts/ci-version.py
+      - name: Validate the release plan without overwriting tags
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/android-release.py plan
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
+        if: steps.plan.outputs.build == 'true'
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+      - name: Install pinned Flutter
+        if: steps.plan.outputs.build == 'true'
+        run: bash scripts/flutter-toolchain.sh
+      - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407
+        if: steps.plan.outputs.build == 'true'
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
+      - if: steps.plan.outputs.build == 'true'
+        run: sdkmanager 'platforms;android-36' 'build-tools;35.0.0' 'ndk;27.0.12077973'
+      - if: steps.plan.outputs.build == 'true'
+        working-directory: client
+        run: flutter pub get --enforce-lockfile
+      - name: Sign with Haven's permanent identity
+        if: steps.plan.outputs.build == 'true'
+        env:
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+        run: python3 scripts/android-release.py build
+      - name: Remove signing material even after failure
+        if: always()
+        run: rm -f "$RUNNER_TEMP/android-permanent-release.jks"
+      - name: Verify certificate, APK identity, and hashes
+        if: steps.plan.outputs.build == 'true'
+        run: python3 scripts/android-release.py stage
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: steps.plan.outputs.build == 'true'
+        with:
+          name: haven-signed-android-${{ steps.plan.outputs.version }}
+          path: ${{ runner.temp }}/android-release-dist/*
+          if-no-files-found: error
+          retention-days: 14
+      - name: Publish verified stable APK for Private Store
+        if: steps.plan.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/android-release.py publish

@@ -1,0 +1,22 @@
+{
+  "name": "Haven",
+  "kind": "flutter",
+  "project_dir": "client",
+  "version_file": "client/pubspec.yaml",
+  "package": "cool.gravitas.haven",
+  "min_sdk": 26,
+  "key_alias": "haven-release",
+  "certificate_sha256": "3c01375ebd40c543f9d6d1a6c1aeb18c689188eee35341a3b1ba3b89a397c085",
+  "version_policy": "workflow-run-number-v1",
+  "apk": "client/build/app/outputs/flutter-apk/app-release.apk",
+  "asset": "Haven-v{version}-android.apk",
+  "build": [
+    "flutter",
+    "--no-version-check",
+    "build",
+    "apk",
+    "--release",
+    "--no-pub",
+    "--dart-define=HAVEN_BACKEND=https://haven.gravitas.cool"
+  ]
+}
