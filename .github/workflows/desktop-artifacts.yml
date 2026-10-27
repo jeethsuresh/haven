@@ -1,0 +1,39 @@
+name: Desktop bundles (manual)
+on:
+  workflow_dispatch:
+    inputs:
+      backend_origin:
+        description: HTTPS origin of the deployed Haven backend
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {os: ubuntu-latest, target: linux, bundle: client/build/linux/x64/release/bundle}
+          - {os: windows-latest, target: windows, bundle: client/build/windows/x64/runner/Release}
+          - {os: macos-latest, target: macos, bundle: client/build/macos/Build/Products/Release}
+    runs-on: ${{ matrix.os }}
+    env:
+      HAVEN_BACKEND_ORIGIN: ${{ inputs.backend_origin }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          cache: true
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev libsecret-1-dev libpulse-dev libasound2-dev libx11-dev libxext-dev libxrandr-dev libxfixes-dev libxdamage-dev libxtst-dev libgbm-dev
+      - run: flutter pub get
+        working-directory: client
+      - run: flutter build ${{ matrix.target }} --release --dart-define="HAVEN_BACKEND=$HAVEN_BACKEND_ORIGIN"
+        shell: bash
+        working-directory: client
+      - uses: actions/upload-artifact@v4
+        with:
+          name: haven-${{ matrix.target }}-unsigned
+          path: ${{ matrix.bundle }}

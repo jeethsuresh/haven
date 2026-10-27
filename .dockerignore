@@ -1,0 +1,14 @@
+.git
+.local
+.env
+**/*.keystore
+**/*.jks
+**/*.pem
+**/*.key
+client/.dart_tool
+client/android
+client/linux
+client/macos
+client/windows
+client/build/*
+!client/build/web

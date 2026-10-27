@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:gravitas:haven:structured:v1",
+  "title": "Haven structured record v1",
+  "oneOf": [
+    {
+      "type": "object",
+      "required": ["schema", "kind", "id", "updated_at", "name"],
+      "properties": {
+        "schema": {"const": 1},
+        "kind": {"const": "contact"},
+        "id": {"type": "string", "minLength": 1},
+        "updated_at": {"type": "string", "format": "date-time"},
+        "name": {"type": "string"},
+        "phones": {"type": "array", "items": {"type": "string"}},
+        "emails": {"type": "array", "items": {"type": "string"}},
+        "external_ids": {"type": "object", "additionalProperties": {"type": "string"}}
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["schema", "kind", "id", "updated_at", "title", "body"],
+      "properties": {
+        "schema": {"const": 1},
+        "kind": {"const": "note"},
+        "id": {"type": "string", "minLength": 1},
+        "updated_at": {"type": "string", "format": "date-time"},
+        "title": {"type": "string"},
+        "body": {"type": "string"},
+        "format": {"enum": ["plain", "markdown"]},
+        "tags": {"type": "array", "items": {"type": "string"}}
+      },
+      "additionalProperties": false
+    }
+  ]
+}

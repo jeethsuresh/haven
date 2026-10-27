@@ -1,0 +1,14 @@
+.local/
+.env
+*.keystore
+*.jks
+*.pem
+*.key
+release/
+client/.dart_tool/
+client/build/
+client/android/local.properties
+client/android/.gradle/
+client/**/flutter/ephemeral/
+client/.flutter-plugins-dependencies
+.DS_Store

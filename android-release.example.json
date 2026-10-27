@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "applicationId": "cool.gravitas.haven",
+  "versionName": "0.1.0",
+  "versionCode": 1,
+  "status": "unpublished-scaffold",
+  "artifactUrl": null,
+  "sha256": null,
+  "signingCertificateSha256": null,
+  "note": "Adapt to the Private Store ingestion contract after signing and device verification."
+}
