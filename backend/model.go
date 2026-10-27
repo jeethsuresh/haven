@@ -61,6 +61,7 @@ type Replica struct {
 	Verified   int64  `json:"verified"`
 }
 type Transfer struct {
+	Purpose    string `json:"purpose,omitempty"`
 	ID         string `json:"id"`
 	Account    string `json:"-"`
 	AssetID    string `json:"asset_id"`
@@ -82,10 +83,11 @@ type State struct {
 	Replicas  []Replica
 	Transfers map[string]Transfer
 	Sessions  map[string]Session
+	Reports   map[string]DeviceReport
 }
 
 func emptyState() State {
-	return State{Devices: map[string]Device{}, Assets: map[string]Asset{}, Replicas: []Replica{}, Transfers: map[string]Transfer{}, Sessions: map[string]Session{}}
+	return State{Devices: map[string]Device{}, Assets: map[string]Asset{}, Replicas: []Replica{}, Transfers: map[string]Transfer{}, Sessions: map[string]Session{}, Reports: map[string]DeviceReport{}}
 }
 
 // Account is hidden from API JSON but must survive snapshots. Use a separate
@@ -120,6 +122,9 @@ func openStore(dir string) (*Store, error) {
 	}
 	if d.State.Devices == nil || d.State.Assets == nil || d.State.Sessions == nil || d.State.Transfers == nil {
 		return nil, errors.New("invalid catalog")
+	}
+	if d.State.Reports == nil {
+		d.State.Reports = map[string]DeviceReport{}
 	}
 	s.state = d.State
 	for id, owner := range d.DeviceOwners {
@@ -260,7 +265,7 @@ func plan(st *State, a Asset) {
 			}
 		}
 		for key, t := range st.Transfers {
-			if t.AssetID == a.ID && t.RevisionID == h.ID && t.To == device.ID && t.Status != "superseded" {
+			if t.Purpose != "thumbnail" && t.AssetID == a.ID && t.RevisionID == h.ID && t.To == device.ID && t.Status != "superseded" {
 				already = true
 				if t.Status != "complete" && from != "" && from != t.From && st.Devices[t.From].Seen < time.Now().Add(-60*time.Second).Unix() {
 					t.From, t.Status, t.Updated = from, "waiting_for_peer", time.Now().Unix()

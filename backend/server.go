@@ -4,9 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"image"
-	"image/jpeg"
-	_ "image/png"
 	"io"
 	"net/http"
 	"os"
@@ -155,8 +152,9 @@ func (s *Server) handler() http.Handler {
 	})
 	m.HandleFunc("GET /api/assets", s.assets)
 	m.HandleFunc("POST /api/assets", s.publish)
-	m.HandleFunc("PUT /api/assets/{id}/thumbnail", s.putThumbnail)
-	m.HandleFunc("GET /api/assets/{id}/thumbnail", s.thumbnail)
+	m.HandleFunc("POST /api/thumbnail-requests", s.requestThumbnail)
+	m.HandleFunc("POST /api/reports", s.reportDevice)
+	m.HandleFunc("GET /api/reports", s.reports)
 	m.HandleFunc("GET /api/transfers", s.transfers)
 	m.HandleFunc("POST /api/transfers/{id}", s.updateTransfer)
 	m.HandleFunc("POST /api/signals", s.signal)
@@ -224,7 +222,7 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		a.DeviceID = id
 		st.Sessions[key] = a
 		for k, t := range st.Transfers {
-			if (t.From == id && !device.has("source") && !device.has("sink")) || (t.To == id && !device.has("sink")) {
+			if (t.From == id && !device.has("source") && !device.has("sink")) || (t.To == id && t.Purpose != "thumbnail" && !device.has("sink")) {
 				t.Status = "superseded"
 				st.Transfers[k] = t
 			}
@@ -356,70 +354,6 @@ func (s *Server) publish(w http.ResponseWriter, r *http.Request) {
 	}
 	reply(w, 200, out)
 }
-func (s *Server) putThumbnail(w http.ResponseWriter, r *http.Request) {
-	a, _, ok := s.authorize(w, r)
-	if !ok {
-		return
-	}
-	id := r.PathValue("id")
-	s.store.mu.Lock()
-	asset, exists := s.store.state.Assets[id]
-	d, err := s.actor(&s.store.state, a)
-	s.store.mu.Unlock()
-	if !exists || asset.Account != a.Account || asset.Kind != "media" || err != nil || (!d.has("source") && !d.has("sink")) {
-		fail(w, 404, "not_found")
-		return
-	}
-	b, e := io.ReadAll(http.MaxBytesReader(w, r.Body, 128<<10))
-	if e != nil {
-		fail(w, 413, "thumbnail_too_large")
-		return
-	}
-	c, _, e := image.DecodeConfig(bytes.NewReader(b))
-	if e != nil || c.Width < 1 || c.Height < 1 || c.Width > 512 || c.Height > 512 {
-		fail(w, 400, "expected_jpeg_or_png_thumbnail_up_to_512px")
-		return
-	}
-	// Re-encode to strip EXIF and embedded ancillary data.
-	img, _, e := image.Decode(bytes.NewReader(b))
-	if e != nil {
-		fail(w, 400, "invalid_jpeg")
-		return
-	}
-	var clean bytes.Buffer
-	_ = jpeg.Encode(&clean, img, &jpeg.Options{Quality: 75})
-	dir := filepath.Join(s.dataDir, "thumbnails", a.Account)
-	if os.MkdirAll(dir, 0700) != nil {
-		fail(w, 500, "storage_failed")
-		return
-	}
-	// Include the revision in the filename so an updated asset cannot display a stale thumbnail.
-	if os.WriteFile(filepath.Join(dir, id+"-"+asset.head().ID+".jpg"), clean.Bytes(), 0600) != nil {
-		fail(w, 500, "storage_failed")
-		return
-	}
-	reply(w, 200, map[string]bool{"ok": true})
-}
-func (s *Server) thumbnail(w http.ResponseWriter, r *http.Request) {
-	a, _, ok := s.authorize(w, r)
-	if !ok {
-		return
-	}
-	s.store.mu.Lock()
-	asset, exists := s.store.state.Assets[r.PathValue("id")]
-	s.store.mu.Unlock()
-	if !exists || asset.Account != a.Account {
-		fail(w, 404, "not_found")
-		return
-	}
-	b, e := os.ReadFile(filepath.Join(s.dataDir, "thumbnails", a.Account, asset.ID+"-"+asset.head().ID+".jpg"))
-	if e != nil {
-		fail(w, 404, "thumbnail_unavailable")
-		return
-	}
-	w.Header().Set("Content-Type", "image/jpeg")
-	_, _ = w.Write(b)
-}
 func (s *Server) transfers(w http.ResponseWriter, r *http.Request) {
 	a, _, ok := s.authorize(w, r)
 	if !ok {
@@ -459,7 +393,11 @@ func (s *Server) updateTransfer(w http.ResponseWriter, r *http.Request) {
 			}
 			return errors.New("complete")
 		}
-		if body.Status == "complete" {
+		if t.Purpose == "thumbnail" {
+			if (body.Status == "complete" && d.ID != t.To) || !slices.Contains([]string{"connecting", "transferring", "waiting_for_peer", "complete", "unavailable"}, body.Status) {
+				return errors.New("invalid_thumbnail_status")
+			}
+		} else if body.Status == "complete" {
 			if d.ID != t.To || !d.has("sink") {
 				return errors.New("sink_receipt_required")
 			}
@@ -510,8 +448,9 @@ func (s *Server) signal(w http.ResponseWriter, r *http.Request) {
 	d, e := s.actor(&s.store.state, a)
 	from := s.store.state.Devices[t.From]
 	to := s.store.state.Devices[t.To]
+	current := s.store.state.Assets[t.AssetID]
 	s.store.mu.Unlock()
-	if !exists || t.Account != a.Account || e != nil || (t.From != d.ID && t.To != d.ID) || from.Revoked || to.Revoked || !to.has("sink") || t.Status == "superseded" || t.Status == "complete" || (body.Type == "offer" && t.From != d.ID) || (body.Type == "answer" && t.To != d.ID) {
+	if !exists || t.Account != a.Account || e != nil || (t.From != d.ID && t.To != d.ID) || from.Revoked || to.Revoked || (!from.has("source") && !from.has("sink")) || (t.Purpose != "thumbnail" && !to.has("sink")) || (t.Purpose == "thumbnail" && (!to.has("viewer") || current.ID == "" || current.head().ID != t.RevisionID)) || t.Status == "superseded" || t.Status == "complete" || t.Status == "unavailable" || (body.Type == "offer" && t.From != d.ID) || (body.Type == "answer" && t.To != d.ID) {
 		fail(w, 403, "signal_forbidden")
 		return
 	}

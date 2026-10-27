@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -29,6 +30,10 @@ func main() {
 	}
 	store, err := openStore(env("HAVEN_DATA", ".local"))
 	if err != nil {
+		log.Fatal(err)
+	}
+	// Retire the old derived cache; thumbnail bytes now live only on devices.
+	if err := os.RemoveAll(filepath.Join(env("HAVEN_DATA", ".local"), "thumbnails")); err != nil {
 		log.Fatal(err)
 	}
 	s := &Server{store: store, dev: dev, appURL: appURL, dataDir: env("HAVEN_DATA", ".local"), webDir: env("HAVEN_WEB", "../client/build/web"), pending: map[string]pendingLogin{}, stunURLs: []string{}}

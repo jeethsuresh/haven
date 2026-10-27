@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "versionCode": 1,
   "changes": [
-    "Initial Haven media library for Android sources, desktop sinks, and web viewers.",
-    "Gallery discovery and direct backups run while Haven is open.",
-    "Originals stay on your devices; restrictive networks may need a different direct route."
+    "Web viewers read account-scoped localStorage thumbnail caches first, fetching missing revisions directly from sources or sinks over WebRTC.",
+    "Sources and sinks report pending items and errors every 15 seconds while open, with persistent status visible to viewers.",
+    "Thumbnail bytes no longer pass through or remain stored on the Haven backend."
   ]
 }
