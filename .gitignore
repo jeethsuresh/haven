@@ -12,3 +12,6 @@ client/android/.gradle/
 client/**/flutter/ephemeral/
 client/.flutter-plugins-dependencies
 .DS_Store
+.gravitas-runtime/
+__pycache__/
+*.pyc

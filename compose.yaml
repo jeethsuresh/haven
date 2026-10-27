@@ -7,7 +7,7 @@ services:
       GRAVITAS_SESSION_KEY: ${GRAVITAS_SESSION_KEY:?Generate a session encryption key}
       HAVEN_STUN_URLS: ${HAVEN_STUN_URLS:-}
     ports:
-      - "127.0.0.1:8090:8090"
+      - "127.0.0.1:8090:8080"
     volumes:
       - catalog:/data
     restart: unless-stopped

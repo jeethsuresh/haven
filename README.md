@@ -1,8 +1,6 @@
 # Haven
 
-Your media, on your devices. A **local development scaffold**, with a shared
-Flutter app for Android sources, desktop sinks, and web viewers, and a Go control
-service. Nothing has been deployed or published to GitHub or the Private Store.
+Your media, on your devices. An early media backup app with a shared Flutter client for Android sources, desktop sinks, and web viewers, plus a Go control service. The `main` pipeline deploys the service at https://haven.gravitas.cool and publishes a signed Android release for [Private Store](https://apps.gravitas.cool/apps/haven).
 
 ## Run locally
 
@@ -88,16 +86,15 @@ by the receiver are retained in `.haven/history/`.
 
 Production requires HTTPS, a session encryption key, a persistent data volume,
 and a pinned Gravitas issuer. Copy `.env.example` to `.env` and fill it locally.
-Never commit `.env` or a signing key. Build the web viewer before Docker:
+Never commit `.env` or a signing key. Docker builds the pinned Flutter web viewer and Go server from source:
 
 ```bash
-cd client && flutter build web --release && cd ..
 docker compose up --build
 # Optional separate STUN service:
 docker compose --profile stun up --build
 ```
 
-Terminate HTTPS at your reverse proxy and forward to the loopback HTTP port.
+The production pipeline uses the existing Gravitas HTTPS ingress, an app-scoped deployer, and a retained 5 GiB catalog/thumbnail volume. For independent hosting, terminate HTTPS at your reverse proxy and forward to the loopback HTTP port.
 Set `HAVEN_APP_URL` to the exact public origin. The callback is
 `/auth/gravitas/callback`; the login entry point is `/auth/gravitas/start`.
 The existing Gravitas protocol needs no OAuth client secret or OIDC registration.
@@ -135,8 +132,13 @@ This establishes the architecture and first media flow, not a production release
 - Local originals and thumbnails are not encrypted at rest by Haven. Data-channel
   transport uses DTLS; independently authenticated device keys and protection
   from a compromised signaling server are future work.
-- No signed APK, desktop installer, live Gravitas deployment, Private Store
-  catalog entry, or GitHub release has been published. See [release notes](docs/releases.md).
+- Desktop installer signing/notarization and GitHub desktop releases remain future work. Android publication and web deployment run automatically after the main pipeline passes. See [release notes](docs/releases.md).
+
+## Continuous publication
+
+Every push to `main` runs backend race tests, client tests and analysis, an Android debug build, and a production image build. A successful run deploys the exact image digest and checks public HTTPS before signing and publishing the APK. Release identity is `0.1.<workflow run number>` with that run number as the Android version code; reruns never overwrite a published release. GitHub queues main runs rather than replacing pending publications.
+
+The initial deployment uses Cloudflare’s public `stun:stun.cloudflare.com:3478` for address discovery. Haven never configures TURN or sends original media through that endpoint. Replace `HAVEN_STUN_URLS` with an owned STUN service when desired.
 
 ## Validate
 
