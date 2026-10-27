@@ -186,6 +186,7 @@ class DiskRepository extends LocalRepository {
       final codec = await ui.instantiateImageCodec(
         await File(entry.ref).readAsBytes(),
         targetWidth: 160,
+        targetHeight: 160,
       );
       final frame = await codec.getNextFrame();
       final data = await frame.image.toByteData(format: ui.ImageByteFormat.png);

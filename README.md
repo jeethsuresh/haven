@@ -67,7 +67,7 @@ server rather than loopback development mode.
 | Android source | Runtime gallery permissions, MediaStore discovery, bounded thumbnail generation, streaming content URI reads |
 | Desktop sink | Selected repository and optional media root, periodic discovery of edits, direct receiving, disk resume, SHA-256 verification, retained previous versions |
 | Peer transfer | WebRTC data channels; 16 KiB frames; a bounded 256 KiB sending window; persisted resume offset; retries when a direct route is unavailable |
-| Backend | Account-scoped devices/catalog/replicas, versioned manifests, automatic source-to-sink jobs, bounded SDP/ICE signaling, private thumbnails |
+| Backend | Account-scoped devices/catalog/replicas, versioned manifests, automatic source-to-sink jobs, bounded SDP/ICE signaling, persisted device status reports |
 | Identity | Gravitas custom PKCE, host-only web sessions, native browser approval/polling bound to a client challenge, central family revalidation before every protected request |
 | Other data | `file`, `contact`, and `note` kinds, dedicated roots, and versioned structured schemas; editors and native contacts/notes adapters are future work |
 
@@ -94,7 +94,7 @@ docker compose up --build
 docker compose --profile stun up --build
 ```
 
-The production pipeline uses the existing Gravitas HTTPS ingress, an app-scoped deployer, and a retained 5 GiB catalog/thumbnail volume. For independent hosting, terminate HTTPS at your reverse proxy and forward to the loopback HTTP port.
+The production pipeline uses the existing Gravitas HTTPS ingress, an app-scoped deployer, and a retained 5 GiB catalog/report volume. For independent hosting, terminate HTTPS at your reverse proxy and forward to the loopback HTTP port.
 Set `HAVEN_APP_URL` to the exact public origin. The callback is
 `/auth/gravitas/callback`; the login entry point is `/auth/gravitas/start`.
 The existing Gravitas protocol needs no OAuth client secret or OIDC registration.
@@ -110,6 +110,12 @@ firewalls, a job waits for a direct route; connectivity is not guaranteed.
 Use your own directly reachable UDP STUN endpoint in production. See
 [WebRTC peer connections](https://webrtc.org/getting-started/peer-connections)
 and [Coturn configuration](https://github.com/coturn/coturn/blob/master/examples/etc/turnserver.conf).
+
+Web viewers use cached thumbnails from browser `localStorage` first. On a cache
+miss or revision change, they fetch a bounded thumbnail directly over WebRTC
+from an online source or sink. Thumbnail bytes never pass through the backend.
+Sources and sinks report pending items and errors every 15 seconds while open;
+viewers can read the latest persisted reports even after a device goes offline.
 
 ## Scope and next steps
 
@@ -148,7 +154,7 @@ The initial deployment uses Cloudflare’s public `stun:stun.cloudflare.com:3478
 
 Backend tests cover ownership across restarts, cross-account isolation, device
 roles/revocation, signaling authorization, forbidden relay candidates, manifest
-validation, thumbnail bounds, conflict branches, and sink receipts. The retained
+validation, direct thumbnail requests, account-scoped device reports, conflict branches, and sink receipts. The retained
 IAM tests exercise PKCE, issuer discovery, federation boundaries, and central
 revocation. Flutter tests exercise persisted resume, corruption rejection,
 offset bounds, prior-version retention, unsent edit protection, delegated media

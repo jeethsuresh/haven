@@ -61,31 +61,4 @@ class HavenApi {
     }
     return value;
   }
-
-  Future<Uint8List?> thumbnail(MediaAsset asset) async {
-    final r = await client
-        .get(
-          Uri.parse('$base/api/assets/${asset.id}/thumbnail'),
-          headers: headers,
-        )
-        .timeout(const Duration(seconds: 20));
-    if (r.statusCode == 404) return null;
-    if (r.statusCode != 200) {
-      throw ApiError(r.statusCode, 'Thumbnail unavailable');
-    }
-    return r.bodyBytes;
-  }
-
-  Future<void> uploadThumbnail(String id, Uint8List bytes) async {
-    final r = await client
-        .put(
-          Uri.parse('$base/api/assets/$id/thumbnail'),
-          headers: {...headers, 'Content-Type': 'application/octet-stream'},
-          body: bytes,
-        )
-        .timeout(const Duration(seconds: 20));
-    if (r.statusCode != 200) {
-      throw ApiError(r.statusCode, 'Thumbnail upload failed');
-    }
-  }
 }

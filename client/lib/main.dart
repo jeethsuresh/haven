@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'api.dart';
 import 'controller.dart';
 import 'model.dart';
 
@@ -643,7 +642,7 @@ class _HavenHomeState extends State<HavenHome> {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                Thumbnail(api: c.api, asset: asset),
+                Thumbnail(controller: c, asset: asset),
                 if (asset.mime.startsWith('video/'))
                   const Center(
                     child: Icon(
@@ -799,6 +798,11 @@ class _HavenHomeState extends State<HavenHome> {
                   spacing: 6,
                   runSpacing: 6,
                   children: [
+                    if (c.deviceReports
+                            .where((r) => r['device_id'] == d['id'])
+                            .firstOrNull
+                        case final Json report)
+                      _reportSummary(report),
                     for (final role in d['roles'])
                       Chip(
                         label: Text(role, style: const TextStyle(fontSize: 11)),
@@ -837,50 +841,121 @@ class _HavenHomeState extends State<HavenHome> {
         ),
     ],
   );
+  Widget _reportSummary(Json report) {
+    final age =
+        DateTime.now().millisecondsSinceEpoch ~/ 1000 -
+        (report['updated'] as int);
+    final stale = age > 45;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '${report['pending_count']} pending · ${(report['errors'] as List).length} errors',
+          style: TextStyle(
+            color: (report['errors'] as List).isEmpty ? ink : Colors.deepOrange,
+          ),
+        ),
+        Text(
+          stale
+              ? 'Last report ${age < 3600 ? '${age ~/ 60} min' : '${age ~/ 3600} hr'} ago · device may be offline'
+              : 'Report received just now',
+          style: const TextStyle(color: muted, fontSize: 12),
+        ),
+        if ((report['scanned'] as int) == 0)
+          const Text(
+            'First scan has not completed',
+            style: TextStyle(color: muted, fontSize: 12),
+          ),
+        for (final issue in report['errors'] as List)
+          Text(
+            issue['message'],
+            style: const TextStyle(color: Colors.deepOrange, fontSize: 12),
+          ),
+      ],
+    );
+  }
+
   Widget _transfers() {
-    final jobs = c.transfers.where((t) => t['status'] != 'superseded').toList();
-    return jobs.isEmpty
-        ? const Padding(
-            padding: EdgeInsets.symmetric(vertical: 70),
-            child: Center(
-              child: Text(
-                'No transfers yet. Connect a source and a sink.',
-                style: TextStyle(color: muted),
+    final jobs = c.transfers
+        .where(
+          (t) => t['purpose'] != 'thumbnail' && t['status'] != 'superseded',
+        )
+        .toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final report in c.deviceReports)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Card(
+              child: Padding(
+                padding: const EdgeInsets.all(18),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _deviceName(report['device_id']),
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 8),
+                    _reportSummary(report),
+                    for (final item in report['pending'] as List)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Text(
+                          '${item['direction']} · ${item['path']}',
+                          style: const TextStyle(color: muted, fontSize: 12),
+                        ),
+                      ),
+                    if ((report['pending_count'] as int) >
+                        (report['pending'] as List).length)
+                      Text(
+                        'Showing ${(report['pending'] as List).length} of ${report['pending_count']} pending items',
+                        style: TextStyle(color: muted, fontSize: 12),
+                      ),
+                  ],
+                ),
               ),
             ),
-          )
-        : Column(
-            children: [
-              for (final job in jobs)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: Card(
-                    child: ListTile(
-                      leading: Icon(
-                        job['status'] == 'complete'
-                            ? Icons.verified_outlined
-                            : Icons.sync,
-                        color: ink,
-                      ),
-                      title: Text(
-                        c.assets
-                                .where((a) => a.id == job['asset_id'])
-                                .firstOrNull
-                                ?.name ??
-                            'Media file',
-                      ),
-                      subtitle: Text(
-                        '${_deviceName(job['from'])} → ${_deviceName(job['to'])}',
-                      ),
-                      trailing: Text(
-                        (job['status'] as String).replaceAll('_', ' '),
-                        style: const TextStyle(color: muted, fontSize: 12),
-                      ),
-                    ),
-                  ),
+          ),
+        if (jobs.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 40),
+            child: Text(
+              'No transfers yet. Connect a source and a sink.',
+              style: TextStyle(color: muted),
+            ),
+          ),
+        for (final job in jobs)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Card(
+              child: ListTile(
+                leading: Icon(
+                  job['status'] == 'complete'
+                      ? Icons.verified_outlined
+                      : Icons.sync,
+                  color: ink,
                 ),
-            ],
-          );
+                title: Text(
+                  c.assets
+                          .where((a) => a.id == job['asset_id'])
+                          .firstOrNull
+                          ?.name ??
+                      'Media file',
+                ),
+                subtitle: Text(
+                  '${_deviceName(job['from'])} → ${_deviceName(job['to'])}',
+                ),
+                trailing: Text(
+                  (job['status'] as String).replaceAll('_', ' '),
+                  style: const TextStyle(color: muted, fontSize: 12),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
   }
 
   String _deviceName(String id) =>
@@ -1041,27 +1116,30 @@ class _HavenHomeState extends State<HavenHome> {
 }
 
 class Thumbnail extends StatefulWidget {
-  final HavenApi api;
+  final HavenController controller;
   final MediaAsset asset;
-  const Thumbnail({super.key, required this.api, required this.asset});
+  const Thumbnail({super.key, required this.controller, required this.asset});
   @override
   State<Thumbnail> createState() => _ThumbnailState();
 }
 
 class _ThumbnailState extends State<Thumbnail> {
   late Future<dynamic> future;
+  DateTime attempted = DateTime.now();
   @override
   void initState() {
     super.initState();
-    future = widget.api.thumbnail(widget.asset);
+    future = widget.controller.thumbnail(widget.asset);
   }
 
   @override
   void didUpdateWidget(covariant Thumbnail old) {
     super.didUpdateWidget(old);
     if (old.asset.revision != widget.asset.revision ||
-        old.asset.id != widget.asset.id) {
-      future = widget.api.thumbnail(widget.asset);
+        old.asset.id != widget.asset.id ||
+        DateTime.now().difference(attempted) > const Duration(seconds: 60)) {
+      attempted = DateTime.now();
+      future = widget.controller.thumbnail(widget.asset);
     }
   }
 

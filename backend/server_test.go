@@ -3,9 +3,6 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"image"
-	"image/color"
-	"image/jpeg"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -164,7 +161,7 @@ func TestConcurrentEditsPreserveBothBranches(t *testing.T) {
 		t.Fatal("canonical head silently overwritten")
 	}
 }
-func TestValidationAndThumbnailBounds(t *testing.T) {
+func TestValidationAndNoServerThumbnailBytes(t *testing.T) {
 	s := fixture(t)
 	source, _ := device(t, s, "alice", "android", "viewer", "source")
 	for _, p := range []string{"Media/../escape", "/Media/photo.jpg", "Media/a\\b.jpg", "Media/CON.jpg", "Media/a:stream", "Media/a/./b", "Files/a.jpg", "Media/a\x00.jpg"} {
@@ -176,24 +173,10 @@ func TestValidationAndThumbnailBounds(t *testing.T) {
 	}
 	a := publishAsset(t, s, source, manifest())
 	url := "/api/assets/" + a.ID + "/thumbnail"
-	if w := call(t, s, "PUT", url, source, bytes.Repeat([]byte("x"), 129<<10)); w.Code != 413 {
-		t.Fatal("thumbnail size limit missing")
-	}
-	var b bytes.Buffer
-	img := image.NewRGBA(image.Rect(0, 0, 513, 10))
-	_ = jpeg.Encode(&b, img, nil)
-	if w := call(t, s, "PUT", url, source, b.Bytes()); w.Code != 400 {
-		t.Fatal("full-size image accepted")
-	}
-	b.Reset()
-	img = image.NewRGBA(image.Rect(0, 0, 64, 64))
-	img.Set(0, 0, color.White)
-	_ = jpeg.Encode(&b, img, nil)
-	if w := call(t, s, "PUT", url, source, b.Bytes()); w.Code != 200 {
-		t.Fatal(w.Body.String())
-	}
-	if w := call(t, s, "GET", url, source, nil); w.Code != 200 || w.Header().Get("Content-Type") != "image/jpeg" {
-		t.Fatal("thumbnail not served")
+	for _, method := range []string{"PUT", "GET"} {
+		if w := call(t, s, method, url, source, bytes.Repeat([]byte("thumbnail"), 1024)); w.Code != 404 {
+			t.Fatalf("backend accepted or served thumbnail bytes: %d", w.Code)
+		}
 	}
 }
 func TestSignalsAreAccountAndTransferBound(t *testing.T) {
