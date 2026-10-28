@@ -56,7 +56,7 @@ Sessions each bind to one device. Revoking it denies its subsequent API requests
 | GET | `/api/transfers` | Account transfer plans |
 | POST | `/api/transfers/{id}` | Status or sink-only hash receipt |
 | POST/GET | `/api/signals` | Authorized offer/answer/ICE; cursor-based polling |
-| POST | `/api/auth/native/start` | Begin challenge-bound native browser login |
+| POST | `/api/auth/native/start` | Begin challenge-bound native browser login; optional native platform |
 | POST | `/api/auth/native/poll` | Redeem a completed approval once |
 | POST | `/api/auth/logout` | Revoke the local session, even during an IAM outage |
 
@@ -131,3 +131,16 @@ clone and atomically replace an fsynced owner-private snapshot; failed writes
 leave the active state unchanged. Only control metadata and device reports are persisted on the backend.
 For scale, replace this with transactional storage behind the same API, not a
 second uncoordinated JSON writer.
+
+## Native sign-in return
+
+Native login requests carry the optional platform name. Android clients can
+return through `haven://auth/complete`, explicitly targeted to the Haven package
+by the browser's Return to Haven button. This link only resumes the activity;
+credentials remain in the HTTPS polling exchange bound to the initiating PKCE
+verifier. Flutter route handling is disabled for this resume-only link. Older
+clients that omit the platform keep the manual return flow.
+
+An approval is terminal until redeemed or expired. Revisiting the browser page
+returns the connected page for the same account and cannot reset approval or
+rebind it to another account. Native redemption remains one-use.

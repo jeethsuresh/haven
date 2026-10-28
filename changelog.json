@@ -3,8 +3,7 @@
   "version": "0.1.0",
   "versionCode": 1,
   "changes": [
-    "Web viewers read account-scoped localStorage thumbnail caches first, fetching missing revisions directly from sources or sinks over WebRTC.",
-    "Sources and sinks report pending items and errors every 15 seconds while open, with persistent status visible to viewers.",
-    "Thumbnail bytes no longer pass through or remain stored on the Haven backend."
+    "Android sign-in approvals survive browser Back, reload and tab restoration while Haven resumes.",
+    "A Return to Haven button brings updated Android clients back from browser approval."
   ]
 }

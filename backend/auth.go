@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 
 type pendingLogin struct {
 	Challenge, Envelope, Account, Approval string
+	Platform                               string
 	Expires                                int64
 }
 
@@ -163,12 +165,13 @@ func (s *Server) authRoutes(m *http.ServeMux) {
 		}
 		var body struct {
 			Challenge string `json:"challenge"`
+			Platform  string `json:"platform"`
 		}
 		if !decode(w, r, &body) {
 			return
 		}
 		b, e := base64.RawURLEncoding.DecodeString(body.Challenge)
-		if e != nil || len(b) != 32 {
+		if e != nil || len(b) != 32 || (body.Platform != "" && !slices.Contains([]string{"android", "linux", "windows", "macos"}, body.Platform)) {
 			fail(w, 400, "invalid_challenge")
 			return
 		}
@@ -180,7 +183,7 @@ func (s *Server) authRoutes(m *http.ServeMux) {
 			return
 		}
 		id := randomID()
-		s.pending[id] = pendingLogin{Challenge: body.Challenge, Expires: time.Now().Add(10 * time.Minute).Unix()}
+		s.pending[id] = pendingLogin{Challenge: body.Challenge, Platform: body.Platform, Expires: time.Now().Add(10 * time.Minute).Unix()}
 		next := "/native/complete?id=" + id
 		reply(w, 200, map[string]string{"id": id, "approval_url": s.appURL + "/auth/gravitas/start?next=" + url.QueryEscape(next)})
 	})
@@ -193,10 +196,23 @@ func (s *Server) authRoutes(m *http.ServeMux) {
 		s.mu.Lock()
 		s.prunePending()
 		p, exists := s.pending[id]
+		if exists && p.Approval == "approved" {
+			s.mu.Unlock()
+			if p.Account != session.Account {
+				fail(w, 403, "invalid_approval")
+				return
+			}
+			nativeConnected(w, p.Platform)
+			return
+		}
 		if exists {
+			// Browser Back, reload and tab restore must not invalidate a form
+			// for the same account, or undo an approval waiting for the app.
+			if p.Approval == "" || p.Account != session.Account {
+				p.Approval = randomID()
+			}
 			p.Account = session.Account
 			p.Envelope = session.Envelope
-			p.Approval = randomID()
 			s.pending[id] = p
 		}
 		s.mu.Unlock()
@@ -234,8 +250,7 @@ func (s *Server) authRoutes(m *http.ServeMux) {
 		}
 		p.Approval = "approved"
 		s.pending[id] = p
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		fmt.Fprint(w, "<title>Haven connected</title><p>Connected. You can return to Haven.</p>")
+		nativeConnected(w, p.Platform)
 	})
 	m.HandleFunc("POST /api/auth/native/poll", func(w http.ResponseWriter, r *http.Request) {
 		if !s.validMutation(r) {
@@ -278,4 +293,15 @@ func (s *Server) prunePending() {
 			delete(s.pending, k)
 		}
 	}
+}
+
+// The Android intent only resumes Haven. The token is redeemed separately over
+// HTTPS by the initiating app's PKCE verifier; no credentials enter this link.
+func nativeConnected(w http.ResponseWriter, platform string) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	fmt.Fprint(w, `<!doctype html><meta name="viewport" content="width=device-width"><title>Haven connected</title><main style="font:18px system-ui;max-width:36rem;margin:10vh auto;padding:2rem"><h1>You're connected</h1><p>Switch back to Haven to finish signing in.</p>`)
+	if platform == "android" {
+		fmt.Fprint(w, `<p><a style="display:inline-block;background:#193d34;color:white;padding:1rem;text-decoration:none;border-radius:.6rem" href="intent://auth/complete#Intent;scheme=haven;package=cool.gravitas.haven;end">Return to Haven</a></p>`)
+	}
+	fmt.Fprint(w, `</main>`)
 }
