@@ -15,6 +15,7 @@ import 'peer.dart';
 class HavenController extends ChangeNotifier {
   final HavenApi api;
   final LocalRepository local;
+  final Future<bool> Function(Uri) openNativeBrowser;
   late final DirectPeers peers;
   late final ThumbnailCache thumbnails;
   final Map<String, Completer<Uint8List?>> _thumbnailRequests = {};
@@ -39,9 +40,15 @@ class HavenController extends ChangeNotifier {
   Timer? _timer, _reportTimer;
   bool _reporting = false;
   DateTime _lastScan = DateTime(2000);
-  HavenController({HavenApi? api, LocalRepository? local})
-    : api = api ?? HavenApi(),
-      local = local ?? createRepository() {
+  HavenController({
+    HavenApi? api,
+    LocalRepository? local,
+    Future<bool> Function(Uri)? openNativeBrowser,
+  }) : api = api ?? HavenApi(),
+       local = local ?? createRepository(),
+       openNativeBrowser =
+           openNativeBrowser ??
+           ((uri) => launchUrl(uri, mode: LaunchMode.externalApplication)) {
     thumbnails = ThumbnailCache(createThumbnailStorage(), report);
     peers = DirectPeers(this.api, this.local, report, thumbnails, (
       asset,
@@ -61,7 +68,7 @@ class HavenController extends ChangeNotifier {
       ? 'web'
       : isAndroid
       ? 'android'
-      : defaultTargetPlatform.name;
+      : defaultTargetPlatform.name.toLowerCase();
   void changed() {
     if (!_disposed) notifyListeners();
   }
@@ -151,14 +158,14 @@ class HavenController extends ChangeNotifier {
         ).replaceAll('=', '');
         final request = await api.request('POST', '/api/auth/native/start', {
           'challenge': challenge,
+          'platform': platform,
         });
-        if (!await launchUrl(
-          Uri.parse(request['approval_url']),
-          mode: LaunchMode.externalApplication,
-        )) {
+        if (!await openNativeBrowser(Uri.parse(request['approval_url']))) {
           throw StateError('Could not open sign-in browser');
         }
-        report('Finish signing in with Gravitas in your browser.');
+        report(
+          'Sign in and connect this device in your browser, then return to Haven.',
+        );
         for (var attempt = 0; attempt < 200; attempt++) {
           await Future<void>.delayed(const Duration(seconds: 3));
           if (_disposed) return;
