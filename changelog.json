@@ -3,7 +3,6 @@
   "version": "0.1.0",
   "versionCode": 1,
   "changes": [
-    "Android sign-in approvals survive browser Back, reload and tab restoration while Haven resumes.",
-    "A Return to Haven button brings updated Android clients back from browser approval."
+    "Signed Android updates continue to publish correctly alongside Haven\u2019s new desktop apps."
   ]
 }

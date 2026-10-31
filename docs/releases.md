@@ -23,3 +23,5 @@ Update tracked `changelog.json` whenever user-visible behavior changes. Its vers
 ## Desktop
 
 The same main-branch workflow automatically builds, launches and publishes native macOS, Windows and Linux clients after verified backend deployment. Desktop version codes are independent of Android's workflow sequence; releases use immutable `desktop-vX.Y.Z` tags, a Store manifest and verified package hashes. See [DESKTOP_RELEASES.md](../DESKTOP_RELEASES.md). The manual artifact-only workflow is retained for diagnostics; production builds always pin `https://haven.gravitas.cool` and need no backend-origin input.
+
+Pre-merge Android checks compile the exact release command with a disposable CI-only certificate. The fixture APK and key are deleted. Public releases use the protected permanent certificate and must pass the existing APK certificate/hash checks. Release builds run Flutter platform generation so test-only plugins are excluded.

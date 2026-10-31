@@ -64,6 +64,8 @@ jobs:
         run: |
           flutter pub get --enforce-lockfile
           flutter build apk --debug --no-pub --dart-define=HAVEN_BACKEND=https://haven.gravitas.cool
+      - name: Compile the exact release command with a disposable CI certificate
+        run: python3 scripts/test-release-compile.py
   image:
     needs: [backend, client, android]
     runs-on: ubuntu-24.04
