@@ -22,4 +22,4 @@ Update tracked `changelog.json` whenever user-visible behavior changes. Its vers
 
 ## Desktop
 
-The manual `desktop-artifacts.yml` workflow builds Linux, Windows and macOS bundles. Its HTTPS backend-origin input is required. These are unsigned build artifacts, not published signed installers. Desktop signing/notarization and automatic GitHub desktop releases remain a separate step.
+The same main-branch workflow automatically builds, launches and publishes native macOS, Windows and Linux clients after verified backend deployment. Desktop version codes are independent of Android's workflow sequence; releases use immutable `desktop-vX.Y.Z` tags, a Store manifest and verified package hashes. See [DESKTOP_RELEASES.md](../DESKTOP_RELEASES.md). The manual artifact-only workflow is retained for diagnostics; production builds always pin `https://haven.gravitas.cool` and need no backend-origin input.

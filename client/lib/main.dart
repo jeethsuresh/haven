@@ -12,7 +12,8 @@ const ink = Color(0xFF193D34),
     muted = Color(0xFF6D7D76);
 
 class HavenApp extends StatelessWidget {
-  const HavenApp({super.key});
+  final HavenController? controller;
+  const HavenApp({super.key, this.controller});
   @override
   Widget build(BuildContext context) => MaterialApp(
     title: 'Haven',
@@ -44,12 +45,13 @@ class HavenApp extends StatelessWidget {
         ),
       ),
     ),
-    home: const HavenHome(),
+    home: HavenHome(controller: controller),
   );
 }
 
 class HavenHome extends StatefulWidget {
-  const HavenHome({super.key});
+  final HavenController? controller;
+  const HavenHome({super.key, this.controller});
   @override
   State<HavenHome> createState() => _HavenHomeState();
 }
@@ -61,7 +63,7 @@ class _HavenHomeState extends State<HavenHome> {
   @override
   void initState() {
     super.initState();
-    c = HavenController()..addListener(_update);
+    c = (widget.controller ?? HavenController())..addListener(_update);
     c.initialize();
   }
 

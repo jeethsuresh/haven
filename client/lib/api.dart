@@ -30,7 +30,9 @@ class HavenApi {
   };
   Future<void> restore() async {
     if (!kIsWeb) {
-      token = await const FlutterSecureStorage().read(key: 'haven:$base');
+      token = await const FlutterSecureStorage(
+        mOptions: MacOsOptions(usesDataProtectionKeychain: false),
+      ).read(key: 'haven:$base');
     }
   }
 
@@ -38,12 +40,13 @@ class HavenApi {
     token = value;
     if (!kIsWeb) {
       if (value == null) {
-        await const FlutterSecureStorage().delete(key: 'haven:$base');
+        await const FlutterSecureStorage(
+          mOptions: MacOsOptions(usesDataProtectionKeychain: false),
+        ).delete(key: 'haven:$base');
       } else {
-        await const FlutterSecureStorage().write(
-          key: 'haven:$base',
-          value: value,
-        );
+        await const FlutterSecureStorage(
+          mOptions: MacOsOptions(usesDataProtectionKeychain: false),
+        ).write(key: 'haven:$base', value: value);
       }
     }
   }
