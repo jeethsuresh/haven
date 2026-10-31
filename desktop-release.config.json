@@ -1,0 +1,24 @@
+{
+  "name": "Haven",
+  "directory": "client",
+  "engine": "flutter",
+  "version": "0.1.0",
+  "versionCode": 1000,
+  "flutterVersion": "3.47.7",
+  "flutterRevision": "abaf9c523780a608bd46686fd5e53740a07077f8",
+  "defines": [
+    "HAVEN_BACKEND=https://haven.gravitas.cool"
+  ],
+  "changes": [
+    "Haven is now a native macOS, Windows and Linux app: choose your local backup folders and receive original media directly from your other devices.",
+    "Use Gravitas browser sign-in and Private Store for installation and updates. Keep Haven open while backups run."
+  ],
+  "schemaVersion": 1,
+  "slug": "haven",
+  "repository": "jeethsuresh/haven",
+  "entries": {
+    "macos": "Haven.app",
+    "windows": "haven.exe",
+    "linux": "haven-launch"
+  }
+}

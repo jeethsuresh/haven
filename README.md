@@ -160,3 +160,5 @@ revocation. Flutter tests exercise persisted resume, corruption rejection,
 offset bounds, prior-version retention, unsent edit protection, delegated media
 folders, and path/symlink rejection. See [architecture](docs/architecture.md)
 and [verification](docs/verification.md) for the tested boundaries.
+
+Native desktop builds, automatic publishing and Private Store updates: [DESKTOP_RELEASES.md](DESKTOP_RELEASES.md).
