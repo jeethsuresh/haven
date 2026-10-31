@@ -16,7 +16,6 @@
     "build",
     "apk",
     "--release",
-    "--no-pub",
     "--dart-define=HAVEN_BACKEND=https://haven.gravitas.cool"
   ]
 }
