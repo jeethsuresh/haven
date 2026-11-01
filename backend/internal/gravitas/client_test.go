@@ -13,7 +13,11 @@ import (
 	"time"
 )
 
-func fixture(t *testing.T) (*Client, *atomic.Int32) {
+func fixture(t *testing.T, codes ...string) (*Client, *atomic.Int32) {
+	code := "one-use-code"
+	if len(codes) > 0 {
+		code = codes[0]
+	}
 	t.Helper()
 	calls := &atomic.Int32{}
 	var issuer string
@@ -27,7 +31,7 @@ func fixture(t *testing.T) (*Client, *atomic.Int32) {
 	mux.HandleFunc("POST /oauth/token", func(w http.ResponseWriter, r *http.Request) {
 		_ = r.ParseForm()
 		verifier := r.Form.Get("code_verifier")
-		if r.Form.Get("code") != "one-use-code" || len(verifier) != 43 || r.Form.Get("redirect_uri") != "https://app.example/auth/gravitas/callback" || r.Form.Get("grant_type") != "authorization_code" || calls.Add(1) != 1 {
+		if r.Form.Get("code") != code || len(verifier) != 43 || r.Form.Get("redirect_uri") != "https://app.example/auth/gravitas/callback" || r.Form.Get("grant_type") != "authorization_code" || calls.Add(1) != 1 {
 			w.WriteHeader(400)
 			return
 		}

@@ -2,16 +2,16 @@
   "name": "Haven",
   "directory": "client",
   "engine": "flutter",
-  "version": "0.1.0",
-  "versionCode": 1000,
+  "version": "0.1.1",
+  "versionCode": 1001,
   "flutterVersion": "3.47.7",
   "flutterRevision": "abaf9c523780a608bd46686fd5e53740a07077f8",
   "defines": [
     "HAVEN_BACKEND=https://haven.gravitas.cool"
   ],
   "changes": [
-    "Haven is now a native macOS, Windows and Linux app: choose your local backup folders and receive original media directly from your other devices.",
-    "Use Gravitas browser sign-in and Private Store for installation and updates. Keep Haven open while backups run."
+    "Sign in with the Gravitas account in desktop Private Store after approving this service.",
+    "Browser sign-in remains available when Private Store is unavailable or this service needs consent. Cancelling Store approval stops the sign-in attempt."
   ],
   "schemaVersion": 1,
   "slug": "haven",

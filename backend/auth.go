@@ -158,6 +158,51 @@ func (s *Server) authRoutes(m *http.ServeMux) {
 		s.setCookie(w, token, int(expires-time.Now().Unix()))
 		http.Redirect(w, r, next, http.StatusSeeOther)
 	})
+	m.HandleFunc("POST /api/auth/native/broker", func(w http.ResponseWriter, r *http.Request) {
+		if !s.validMutation(r) {
+			fail(w, 403, "invalid_origin_or_csrf")
+			return
+		}
+		if s.iam == nil {
+			fail(w, 503, "identity_unavailable")
+			return
+		}
+		var body struct {
+			Code     string `json:"code"`
+			Verifier string `json:"code_verifier"`
+			Subject  string `json:"sub"`
+			Family   string `json:"session_id"`
+		}
+		if !decode(w, r, &body) {
+			return
+		}
+		auth, err := s.iam.BrokerAuthorization(r.Context(), body.Code, body.Verifier, body.Subject, body.Family)
+		if err != nil {
+			if errors.Is(err, gravitas.ErrUnavailable) {
+				fail(w, 503, "identity_unavailable")
+			} else {
+				fail(w, 401, "sign_in_failed")
+			}
+			return
+		}
+		// Match Haven's existing browser/device session policy: keep only the
+		// status proof, with an eight-hour maximum; no IAM refresh in Haven.
+		auth.RefreshToken = ""
+		auth.AccessToken = ""
+		auth.AccessExpires = 0
+		expires := min(time.Now().Add(gravitas.SessionLifetime).Unix(), auth.CheckExpires)
+		recorder := httptest.NewRecorder()
+		if err = s.iam.SetAppSession(recorder, gravitas.SessionCookie, auth, "", time.Unix(expires, 0)); err != nil {
+			fail(w, 500, "sign_in_failed")
+			return
+		}
+		token, err := s.issueSession(accountKey(auth.Issuer, auth.Subject), recorder.Result().Cookies()[0].Value, expires)
+		if err != nil {
+			fail(w, 500, "storage_failed")
+			return
+		}
+		reply(w, 200, map[string]string{"token": token})
+	})
 	m.HandleFunc("POST /api/auth/native/start", func(w http.ResponseWriter, r *http.Request) {
 		if !s.validMutation(r) {
 			fail(w, 403, "invalid_origin_or_csrf")

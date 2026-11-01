@@ -1,3 +1,4 @@
+import 'desktop_broker.dart' as desktop_broker;
 import 'dart:async';
 import 'dart:convert';
 import 'dart:collection';
@@ -16,6 +17,8 @@ class HavenController extends ChangeNotifier {
   final HavenApi api;
   final LocalRepository local;
   final Future<bool> Function(Uri) openNativeBrowser;
+  final Future<Map<String, dynamic>?> Function(String, String, String)
+  brokerAuthorize;
   late final DirectPeers peers;
   late final ThumbnailCache thumbnails;
   final Map<String, Completer<Uint8List?>> _thumbnailRequests = {};
@@ -44,8 +47,11 @@ class HavenController extends ChangeNotifier {
     HavenApi? api,
     LocalRepository? local,
     Future<bool> Function(Uri)? openNativeBrowser,
+    Future<Map<String, dynamic>?> Function(String, String, String)?
+    brokerAuthorize,
   }) : api = api ?? HavenApi(),
        local = local ?? createRepository(),
+       brokerAuthorize = brokerAuthorize ?? desktop_broker.authorize,
        openNativeBrowser =
            openNativeBrowser ??
            ((uri) => launchUrl(uri, mode: LaunchMode.externalApplication)) {
@@ -135,7 +141,10 @@ class HavenController extends ChangeNotifier {
     report('Connected. Originals move directly between your devices.');
   }
 
+  int _authGeneration = 0;
   Future<void> signIn({bool development = false}) async {
+    if (busy) return;
+    final generation = ++_authGeneration;
     busy = true;
     changed();
     try {
@@ -156,6 +165,37 @@ class HavenController extends ChangeNotifier {
         final challenge = base64UrlEncode(
           sha256.convert(utf8.encode(verifier)).bytes,
         ).replaceAll('=', '');
+        final state = base64UrlEncode(
+          List<int>.generate(32, (_) => random.nextInt(256)),
+        ).replaceAll('=', '');
+        final broker = await brokerAuthorize(api.base, challenge, state);
+        if (generation != _authGeneration || _disposed) return;
+        if (broker != null) {
+          try {
+            final result = await api
+                .request('POST', '/api/auth/native/broker', {
+                  'code': broker['code'],
+                  'code_verifier': verifier,
+                  'sub': broker['sub'],
+                  'session_id': broker['session_id'],
+                });
+            if (generation != _authGeneration || _disposed) return;
+            if (result['token'] is! String ||
+                (result['token'] as String).isEmpty) {
+              throw StateError('Invalid sign-in session');
+            }
+            await api.setToken(result['token']);
+            if (generation != _authGeneration || _disposed) {
+              await api.setToken(null);
+              return;
+            }
+            await connect();
+            return;
+          } on ApiError catch (e) {
+            if (![400, 401, 403, 404, 405].contains(e.status)) rethrow;
+          }
+        }
+        if (generation != _authGeneration || _disposed) return;
         final request = await api.request('POST', '/api/auth/native/start', {
           'challenge': challenge,
           'platform': platform,
@@ -168,12 +208,17 @@ class HavenController extends ChangeNotifier {
         );
         for (var attempt = 0; attempt < 200; attempt++) {
           await Future<void>.delayed(const Duration(seconds: 3));
-          if (_disposed) return;
+          if (_disposed || generation != _authGeneration) return;
           final result = await api.request('POST', '/api/auth/native/poll', {
             'id': request['id'],
             'verifier': verifier,
           });
+          if (generation != _authGeneration || _disposed) return;
           if (result['token'] != null) {
+            if (result['token'] is! String ||
+                (result['token'] as String).isEmpty) {
+              throw StateError('Invalid sign-in session');
+            }
             await api.setToken(result['token']);
             await connect();
             return;
@@ -190,6 +235,7 @@ class HavenController extends ChangeNotifier {
   }
 
   Future<void> logout() async {
+    _authGeneration++;
     _timer?.cancel();
     _reportTimer?.cancel();
     await peers.close();
