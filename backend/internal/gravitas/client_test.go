@@ -43,7 +43,7 @@ func fixture(t *testing.T, codes ...string) (*Client, *atomic.Int32) {
 			return
 		}
 		u, _ := url.Parse(issuer)
-		_ = json.NewEncoder(w).Encode(Identity{Subject: "stable-subject", Username: "alice", Domain: u.Hostname(), UserID: "@alice:" + u.Hostname()})
+		_ = json.NewEncoder(w).Encode(Identity{Subject: "stable-subject", Name: "Alice Example", Domain: u.Hostname()})
 	})
 	mux.HandleFunc("GET /oauth/session", func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer "+checkToken {
@@ -237,5 +237,16 @@ func TestConsentRequiredOnlyRestartsAnAuthenticatedSilentFlow(t *testing.T) {
 		if calls.Load() != 0 {
 			t.Fatal("consent fallback exchanged a token")
 		}
+	}
+}
+
+func TestProfileNameDoesNotRequireUsername(t *testing.T) {
+	c, _ := fixture(t)
+	f, cookie, _ := start(t, c)
+	r := httptest.NewRequest("GET", c.AppURL+"/auth/gravitas/callback?code=one-use-code&state="+f.State, nil)
+	r.AddCookie(cookie)
+	auth, _, err := c.Callback(httptest.NewRecorder(), r)
+	if err != nil || auth.Name != "Alice Example" || auth.Username != "" || auth.UserID != "" {
+		t.Fatalf("name-only profile rejected: %v", err)
 	}
 }

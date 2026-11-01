@@ -2,16 +2,15 @@
   "name": "Haven",
   "directory": "client",
   "engine": "flutter",
-  "version": "0.1.1",
-  "versionCode": 1001,
+  "version": "0.1.2",
+  "versionCode": 1002,
   "flutterVersion": "3.47.7",
   "flutterRevision": "abaf9c523780a608bd46686fd5e53740a07077f8",
   "defines": [
     "HAVEN_BACKEND=https://haven.gravitas.cool"
   ],
   "changes": [
-    "Sign in with the Gravitas account in desktop Private Store after approving this service.",
-    "Browser sign-in remains available when Private Store is unavailable or this service needs consent. Cancelling Store approval stops the sign-in attempt."
+    "Sign in with your full-name profile without giving this app access to your Gravitas username."
   ],
   "schemaVersion": 1,
   "slug": "haven",
