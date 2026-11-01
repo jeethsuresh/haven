@@ -108,8 +108,9 @@ Future<Map<String, dynamic>?> authorizeDesktopStore({
         await Future<void>.delayed(const Duration(milliseconds: 250));
         descriptor = await read();
         try {
-          reply = await request(descriptor)
-              .timeout(const Duration(seconds: 95));
+          reply = await request(
+            descriptor,
+          ).timeout(const Duration(seconds: 95));
           break;
         } on SocketException {
           continue;
