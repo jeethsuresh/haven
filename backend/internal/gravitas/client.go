@@ -40,6 +40,7 @@ type Identity struct {
 	Issuer   string `json:"issuer"`
 	Subject  string `json:"sub"`
 	Username string `json:"username"`
+	Name     string `json:"name"`
 	Domain   string `json:"domain"`
 	UserID   string `json:"user_id"`
 }
@@ -318,10 +319,10 @@ func (c *Client) exchangeAuthorization(ctx context.Context, code, verifier, user
 	if err = c.getJSON(m.Profile, tokens.AccessToken, &identity.Identity); err != nil {
 		return identity, err
 	}
-	if identity.Subject == "" || len(identity.Subject) > 256 || identity.Username == "" || identity.Domain != m.Domain || identity.UserID != "@"+identity.Username+":"+m.Domain {
+	if identity.Subject == "" || len(identity.Subject) > 256 || identity.Domain != m.Domain || (identity.UserID != "" && identity.UserID != "@"+identity.Username+":"+m.Domain) {
 		return Authorization{}, errors.New("invalid IAM identity")
 	}
-	if username != "" && identity.UserID != username {
+	if username != "" && identity.UserID != "" && identity.UserID != username {
 		return Authorization{}, ErrLoginRequired
 	}
 	identity.Issuer = c.Issuer
