@@ -3,6 +3,6 @@
   "version": "0.1.0",
   "versionCode": 1,
   "changes": [
-    "Signed Android updates continue to publish correctly alongside Haven\u2019s new desktop apps."
+    "Finish Android sign-in after returning from the browser, even if Haven restarts or the connection briefly drops."
   ]
 }

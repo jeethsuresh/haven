@@ -18,6 +18,7 @@ import (
 
 type pendingLogin struct {
 	Challenge, Envelope, Account, Approval string
+	Token                                  string
 	Platform                               string
 	Expires                                int64
 }
@@ -323,12 +324,20 @@ func (s *Server) authRoutes(m *http.ServeMux) {
 			reply(w, 202, map[string]string{"status": "pending"})
 			return
 		}
+		// A suspended Android client may lose the successful HTTP response.
+		// The same verifier can retrieve the same session until login expires;
+		// retries must never mint a second session or revive a logged-out one.
+		if p.Token != "" {
+			reply(w, 200, map[string]string{"token": p.Token})
+			return
+		}
 		token, err := s.issueSession(p.Account, p.Envelope, time.Now().Add(gravitas.SessionLifetime).Unix())
 		if err != nil {
 			fail(w, 500, "storage_failed")
 			return
 		}
-		delete(s.pending, body.ID)
+		p.Token = token
+		s.pending[body.ID] = p
 		reply(w, 200, map[string]string{"token": token})
 	})
 }

@@ -2,15 +2,15 @@
   "name": "Haven",
   "directory": "client",
   "engine": "flutter",
-  "version": "0.1.2",
-  "versionCode": 1002,
+  "version": "0.1.3",
+  "versionCode": 1003,
   "flutterVersion": "3.47.7",
   "flutterRevision": "abaf9c523780a608bd46686fd5e53740a07077f8",
   "defines": [
     "HAVEN_BACKEND=https://haven.gravitas.cool"
   ],
   "changes": [
-    "Sign in with your full-name profile without giving this app access to your Gravitas username."
+    "Recover browser sign-in after restarting Haven or a brief connection interruption."
   ],
   "schemaVersion": 1,
   "slug": "haven",

@@ -147,8 +147,28 @@ func TestNativeLoginBrowserApprovalAndAndroidSession(t *testing.T) {
 	if device.ID == "" || device.Platform != "android" {
 		t.Fatal("Android device not registered")
 	}
+	if w := poll(verifier); w.Code != 200 || value[map[string]string](t, w)["token"] != token {
+		t.Fatal("lost poll response could not recover the same session", w.Body.String())
+	}
+	if w := poll(strings.Repeat("wrong", 9)); w.Code != 404 {
+		t.Fatal("retry accepted a different verifier")
+	}
+	if w := call(t, s, "POST", "/api/auth/logout", token, nil); w.Code != 200 {
+		t.Fatal("logout failed", w.Code)
+	}
+	if w := poll(verifier); w.Code != 200 || value[map[string]string](t, w)["token"] != token {
+		t.Fatal("retry minted a new session after logout")
+	}
+	if w := call(t, s, "GET", "/api/me", token, nil); w.Code != 401 {
+		t.Fatal("retry revived a logged-out session")
+	}
+	s.mu.Lock()
+	pending := s.pending[start["id"]]
+	pending.Expires = time.Now().Add(-time.Second).Unix()
+	s.pending[start["id"]] = pending
+	s.mu.Unlock()
 	if w := poll(verifier); w.Code != 404 {
-		t.Fatal("native approval replayed")
+		t.Fatal("expired retry retained a session")
 	}
 }
 

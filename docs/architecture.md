@@ -57,7 +57,7 @@ Sessions each bind to one device. Revoking it denies its subsequent API requests
 | POST | `/api/transfers/{id}` | Status or sink-only hash receipt |
 | POST/GET | `/api/signals` | Authorized offer/answer/ICE; cursor-based polling |
 | POST | `/api/auth/native/start` | Begin challenge-bound native browser login; optional native platform |
-| POST | `/api/auth/native/poll` | Redeem a completed approval once |
+| POST | `/api/auth/native/poll` | Redeem a completed approval; retry the same session with the same verifier until expiry |
 | POST | `/api/auth/logout` | Revoke the local session, even during an IAM outage |
 
 JSON control bodies are limited to 32 KiB. SDP/ICE is capped at 24 KiB per
@@ -141,6 +141,12 @@ credentials remain in the HTTPS polling exchange bound to the initiating PKCE
 verifier. Flutter route handling is disabled for this resume-only link. Older
 clients that omit the platform keep the manual return flow.
 
-An approval is terminal until redeemed or expired. Revisiting the browser page
+An approval is terminal until expired. Revisiting the browser page
 returns the connected page for the same account and cannot reset approval or
-rebind it to another account. Native redemption remains one-use.
+rebind it to another account. Native redemption issues one session; a retry with
+the same PKCE verifier returns that session until the ten-minute login expires.
+It never creates another session or revives a session after sign-out. Native
+clients save the pending request and verifier in OS credential storage before
+opening the browser, restore it after a process restart, and retry temporary
+network/server failures. Expiry, terminal errors and sign-out clear that state;
+successful redemption clears it after the device session has been saved.
