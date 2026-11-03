@@ -51,6 +51,46 @@ class HavenApi {
     }
   }
 
+  // The browser may outlive the Android process. Keep its PKCE verifier in
+  // encrypted storage until the device session has been saved or login expires.
+  Future<Json?> restoreNativeLogin() async {
+    if (kIsWeb) return null;
+    final raw = await const FlutterSecureStorage(
+      mOptions: MacOsOptions(usesDataProtectionKeychain: false),
+    ).read(key: 'haven:$base:pending-login');
+    if (raw == null) return null;
+    try {
+      final pending = jsonDecode(raw) as Json;
+      if (pending['id'] is String &&
+          (pending['id'] as String).isNotEmpty &&
+          pending['verifier'] is String &&
+          RegExp(r'^[A-Za-z0-9_-]{43}$').hasMatch(pending['verifier']) &&
+          pending['expires'] is int &&
+          DateTime.now().millisecondsSinceEpoch < pending['expires']) {
+        return pending;
+      }
+    } on FormatException {
+      // Invalid or older state cannot be used to resume a sign-in.
+    } on TypeError {
+      // Treat an invalid saved shape as an expired sign-in.
+    }
+    await saveNativeLogin(null);
+    return null;
+  }
+
+  Future<void> saveNativeLogin(Json? pending) async {
+    if (kIsWeb) return;
+    const storage = FlutterSecureStorage(
+      mOptions: MacOsOptions(usesDataProtectionKeychain: false),
+    );
+    final key = 'haven:$base:pending-login';
+    if (pending == null) {
+      await storage.delete(key: key);
+    } else {
+      await storage.write(key: key, value: jsonEncode(pending));
+    }
+  }
+
   Future<dynamic> request(String method, String path, [Json? body]) async {
     final req = http.Request(method, Uri.parse('$base$path'))
       ..headers.addAll({...headers, 'Content-Type': 'application/json'});

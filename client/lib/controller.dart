@@ -8,6 +8,7 @@ import 'thumbnail_storage.dart';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:http/http.dart' as http;
 import 'api.dart';
 import 'local.dart';
 import 'model.dart';
@@ -85,8 +86,10 @@ class HavenController extends ChangeNotifier {
   }
 
   Future<void> initialize() async {
+    var resumeLogin = false;
     try {
       await api.restore();
+      resumeLogin = await api.restoreNativeLogin() != null;
       config = await api.request('GET', '/api/config');
       await connect();
     } on ApiError catch (e) {
@@ -101,6 +104,7 @@ class HavenController extends ChangeNotifier {
       loading = false;
       changed();
     }
+    if (!ready && resumeLogin && !_disposed) await signIn();
   }
 
   Future<void> connect() async {
@@ -158,6 +162,12 @@ class HavenController extends ChangeNotifier {
           webOnlyWindowName: '_self',
         );
       } else {
+        final pending = await api.restoreNativeLogin();
+        if (generation != _authGeneration || _disposed) return;
+        if (pending != null) {
+          await _finishNativeLogin(pending, generation);
+          return;
+        }
         final random = Random.secure();
         final verifier = base64UrlEncode(
           List<int>.generate(32, (_) => random.nextInt(256)),
@@ -200,42 +210,79 @@ class HavenController extends ChangeNotifier {
           'challenge': challenge,
           'platform': platform,
         });
+        if (generation != _authGeneration || _disposed) return;
+        final login = <String, dynamic>{
+          'id': request['id'],
+          'verifier': verifier,
+          'expires': DateTime.now()
+              .add(const Duration(minutes: 10))
+              .millisecondsSinceEpoch,
+        };
+        await api.saveNativeLogin(login);
+        if (generation != _authGeneration) {
+          await api.saveNativeLogin(null);
+          return;
+        }
+        if (_disposed) return;
         if (!await openNativeBrowser(Uri.parse(request['approval_url']))) {
           throw StateError('Could not open sign-in browser');
         }
-        report(
-          'Sign in and connect this device in your browser, then return to Haven.',
-        );
-        for (var attempt = 0; attempt < 200; attempt++) {
-          await Future<void>.delayed(const Duration(seconds: 3));
-          if (_disposed || generation != _authGeneration) return;
-          final result = await api.request('POST', '/api/auth/native/poll', {
-            'id': request['id'],
-            'verifier': verifier,
-          });
-          if (generation != _authGeneration || _disposed) return;
-          if (result['token'] != null) {
-            if (result['token'] is! String ||
-                (result['token'] as String).isEmpty) {
-              throw StateError('Invalid sign-in session');
-            }
-            await api.setToken(result['token']);
-            await connect();
-            return;
-          }
-        }
-        throw StateError('Sign-in expired. Start again.');
+        await _finishNativeLogin(login, generation);
       }
     } catch (e) {
-      report('$e');
+      if (!_disposed && generation == _authGeneration) {
+        await api.saveNativeLogin(null);
+        report('$e');
+      }
     } finally {
       busy = false;
       changed();
     }
   }
 
+  Future<void> _finishNativeLogin(Json login, int generation) async {
+    report(
+      'Sign in and connect this device in your browser, then return to Haven.',
+    );
+    while (DateTime.now().millisecondsSinceEpoch < login['expires']) {
+      if (_disposed || generation != _authGeneration) return;
+      try {
+        final result = await api.request('POST', '/api/auth/native/poll', {
+          'id': login['id'],
+          'verifier': login['verifier'],
+        });
+        if (_disposed || generation != _authGeneration) return;
+        if (result['token'] != null) {
+          if (result['token'] is! String ||
+              (result['token'] as String).isEmpty) {
+            throw StateError('Invalid sign-in session');
+          }
+          await api.setToken(result['token']);
+          if (generation != _authGeneration) {
+            await api.setToken(null);
+            return;
+          }
+          if (_disposed) return;
+          await api.saveNativeLogin(null);
+          await connect();
+          return;
+        }
+      } on ApiError catch (e) {
+        if (e.status < 500 && ![408, 429].contains(e.status)) rethrow;
+        report('Waiting for the connection to finish signing in…');
+      } on http.ClientException {
+        report('Waiting for the connection to finish signing in…');
+      } on TimeoutException {
+        report('Waiting for the connection to finish signing in…');
+      }
+      await Future<void>.delayed(const Duration(seconds: 3));
+    }
+    throw StateError('Sign-in expired. Start again.');
+  }
+
   Future<void> logout() async {
     _authGeneration++;
+    await api.saveNativeLogin(null);
     _timer?.cancel();
     _reportTimer?.cancel();
     await peers.close();
