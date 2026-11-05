@@ -104,6 +104,11 @@ class _HavenHomeState extends State<HavenHome> {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     if (historyAccount != c.account || !c.ready) {
+      if (historyAccount != c.account) {
+        section = 'All media';
+        query = '';
+        search.clear();
+      }
       historyAccount = c.account;
       GravitasNavigation.of(context)?.clear();
     }

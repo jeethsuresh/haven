@@ -1,3 +1,7 @@
+import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
+import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:haven/controller.dart';
@@ -19,11 +23,30 @@ class NavigationController extends HavenController {
 }
 
 void main() {
+  setUpAll(() async {
+    final config =
+        jsonDecode(File('.dart_tool/package_config.json').readAsStringSync())
+            as Map;
+    final packages = config['packages'] as List;
+    final root = Uri.parse(
+      '${packages.firstWhere((p) => p['name'] == 'flutter')['rootUri']}/',
+    );
+    final bytes = await File.fromUri(
+      root.resolve(
+        '../../bin/cache/artifacts/material_fonts/Roboto-Regular.ttf',
+      ),
+    ).readAsBytes();
+    final font = FontLoader('sans-serif')
+      ..addFont(Future.value(ByteData.sublistView(bytes)));
+    await font.load();
+  });
   testWidgets(
     'library destinations restore and history cannot cross accounts',
     (tester) async {
-      await tester.binding.setSurfaceSize(const Size(1200, 900));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
+      tester.view.physicalSize = const Size(1200, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
       final controller = NavigationController();
       await tester.pumpWidget(HavenApp(controller: controller));
       await tester.pumpAndSettle();
