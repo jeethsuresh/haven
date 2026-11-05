@@ -215,4 +215,47 @@ void main() {
       expect(await api.restoreNativeLogin(), isNull);
     },
   );
+
+  test(
+    'explicit browser sign-in bypasses Store and can be cancelled',
+    () async {
+      var browsers = 0;
+      final started = Completer<void>();
+      final response = Completer<http.Response>();
+      final api = HavenApi(
+        base: origin,
+        client: MockClient((request) async {
+          if (request.url.path == '/api/auth/native/start') {
+            return http.Response(
+              '{"id":"request","approval_url":"$origin/auth/gravitas/start"}',
+              200,
+            );
+          }
+          if (!started.isCompleted) started.complete();
+          return response.future;
+        }),
+      );
+      final controller = HavenController(
+        api: api,
+        local: createRepository(),
+        brokerAuthorize: (_, _, _) async =>
+            throw StateError('Browser must bypass Store'),
+        openNativeBrowser: (_) async {
+          browsers++;
+          return true;
+        },
+      );
+      addTearDown(controller.dispose);
+      final login = controller.signIn(browser: true);
+      await started.future;
+      await controller.cancelSignIn();
+      response.complete(http.Response('{"token":"late-session"}', 200));
+      await login;
+      expect(browsers, 1);
+      expect(controller.busy, false);
+      expect(controller.ready, false);
+      expect(api.token, isNull);
+      expect(await api.restoreNativeLogin(), isNull);
+    },
+  );
 }

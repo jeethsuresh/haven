@@ -262,7 +262,7 @@ func (c *Client) Callback(w http.ResponseWriter, r *http.Request) (Authorization
 	}
 	q := r.URL.Query()
 	if f.Expires <= time.Now().Unix() || f.Expires > time.Now().Add(11*time.Minute).Unix() || len(q["state"]) != 1 || f.State == "" || subtle.ConstantTimeCompare([]byte(f.State), []byte(q.Get("state"))) != 1 {
-		return identity, "", errors.New("invalid or expired login state")
+		return identity, SafeNext(f.Next), errors.New("invalid or expired login state")
 	}
 	if failure := q.Get("error"); failure != "" {
 		if failure == "login_required" {

@@ -203,8 +203,19 @@ class _HavenHomeState extends State<HavenHome> {
                     ? null
                     : () => c.signIn(),
                 icon: const Icon(Icons.login),
-                label: const Text('Continue with Gravitas'),
+                label: Text(
+                  c.isAndroid
+                      ? 'Continue with Private Store'
+                      : 'Continue with Gravitas',
+                ),
               ),
+              if (c.isAndroid && c.config['dev'] != true) ...[
+                const SizedBox(height: 12),
+                TextButton(
+                  onPressed: c.busy ? null : () => c.signIn(browser: true),
+                  child: const Text('Sign in using browser'),
+                ),
+              ],
               if (c.config['dev'] == true) ...[
                 const SizedBox(height: 12),
                 OutlinedButton(
@@ -220,6 +231,11 @@ class _HavenHomeState extends State<HavenHome> {
               if (c.busy) ...[
                 const SizedBox(height: 20),
                 const LinearProgressIndicator(),
+                if (c.isAndroid)
+                  TextButton(
+                    onPressed: () => c.cancelSignIn(),
+                    child: const Text('Cancel sign-in'),
+                  ),
               ],
               const SizedBox(height: 24),
               Text(c.message, style: const TextStyle(color: muted)),

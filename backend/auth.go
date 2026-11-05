@@ -87,7 +87,31 @@ func (s *Server) issueSession(account, envelope string, expires int64) (string, 
 	})
 	return token, err
 }
+
+// Keep sign-in usable even when the web client cannot start. Error redirects
+// contain only a fixed message and a validated local destination, never codes.
+func loginPage(w http.ResponseWriter, next, message string) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	target := "/auth/gravitas/start?" + url.Values{"next": {gravitas.SafeNext(next)}}.Encode()
+	fmt.Fprintf(w, `<!doctype html><html lang="en"><meta name="viewport" content="width=device-width"><title>Sign in · Haven</title><main style="font:18px system-ui;max-width:36rem;margin:10vh auto;padding:2rem"><h1>Sign in to Haven</h1><p>%s</p><p><a href="%s">Continue with Gravitas</a></p><p><a href="/">Return to Haven</a></p></main></html>`, html.EscapeString(message), html.EscapeString(target))
+}
+
+func loginFailure(w http.ResponseWriter, r *http.Request, next, reason string) {
+	q := url.Values{"next": {gravitas.SafeNext(next)}, "reason": {reason}}
+	http.Redirect(w, r, "/login?"+q.Encode(), http.StatusSeeOther)
+}
+
 func (s *Server) authRoutes(m *http.ServeMux) {
+	m.HandleFunc("GET /login", func(w http.ResponseWriter, r *http.Request) {
+		message := "Use your Gravitas account to open your library or connect this device."
+		switch r.URL.Query().Get("reason") {
+		case "expired":
+			message = "Sign-in expired or was cancelled. Please try again."
+		case "unavailable":
+			message = "Gravitas is temporarily unavailable. Please try again shortly."
+		}
+		loginPage(w, r.URL.Query().Get("next"), message)
+	})
 	m.HandleFunc("POST /api/dev/login", func(w http.ResponseWriter, r *http.Request) {
 		if !s.dev {
 			fail(w, 404, "not_found")
@@ -122,21 +146,25 @@ func (s *Server) authRoutes(m *http.ServeMux) {
 	})
 	m.HandleFunc("GET /auth/gravitas/start", func(w http.ResponseWriter, r *http.Request) {
 		if s.iam == nil {
-			fail(w, 503, "configure_gravitas_or_use_local_development_login")
+			loginFailure(w, r, r.URL.Query().Get("next"), "unavailable")
 			return
 		}
 		if err := s.iam.Start(w, r, false); err != nil {
-			fail(w, 503, "identity_unavailable")
+			loginFailure(w, r, r.URL.Query().Get("next"), "unavailable")
 		}
 	})
 	m.HandleFunc("GET /auth/gravitas/callback", func(w http.ResponseWriter, r *http.Request) {
 		if s.iam == nil {
-			fail(w, 503, "identity_unavailable")
+			loginFailure(w, r, "/", "unavailable")
 			return
 		}
 		auth, next, err := s.iam.Callback(w, r)
 		if err != nil {
-			fail(w, 401, "sign_in_failed")
+			reason := "expired"
+			if errors.Is(err, gravitas.ErrUnavailable) {
+				reason = "unavailable"
+			}
+			loginFailure(w, r, next, reason)
 			return
 		}
 		// Haven only needs the status proof after sign-in, not upstream data or

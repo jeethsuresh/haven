@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "versionCode": 1,
   "changes": [
-    "Finish Android sign-in after returning from the browser, even if Haven restarts or the connection briefly drops."
+    "Sign in on Android through your Private Store account, with browser sign-in available as a fallback.",
+    "Recover from expired or cancelled website sign-in and return to Haven."
   ]
 }

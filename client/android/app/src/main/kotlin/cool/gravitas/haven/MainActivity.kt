@@ -24,6 +24,16 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(engine: FlutterEngine) {
         super.configureFlutterEngine(engine)
+        MethodChannel(engine.dartExecutor.binaryMessenger, "cool.gravitas.haven/auth")
+            .setMethodCallHandler { call, result ->
+                if (call.method != "broker") { result.notImplemented(); return@setMethodCallHandler }
+                worker.execute {
+                    val value = GravitasBroker(AndroidBrokerPlatform(this)).authorize(
+                        call.argument<String>("challenge") ?: "",
+                        call.argument<String>("state") ?: "", null)
+                    runOnUiThread { if (!isDestroyed) result.success(value) }
+                }
+            }
         MethodChannel(engine.dartExecutor.binaryMessenger, "cool.gravitas.haven/media")
             .setMethodCallHandler { call, result ->
                 when (call.method) {

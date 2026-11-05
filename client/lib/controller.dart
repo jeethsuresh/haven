@@ -1,4 +1,4 @@
-import 'desktop_broker.dart' as desktop_broker;
+import 'native_broker.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:collection';
@@ -52,10 +52,16 @@ class HavenController extends ChangeNotifier {
     brokerAuthorize,
   }) : api = api ?? HavenApi(),
        local = local ?? createRepository(),
-       brokerAuthorize = brokerAuthorize ?? desktop_broker.authorize,
+       brokerAuthorize = brokerAuthorize ?? authorizeNativeBroker,
        openNativeBrowser =
            openNativeBrowser ??
-           ((uri) => launchUrl(uri, mode: LaunchMode.externalApplication)) {
+           ((uri) => launchUrl(
+             uri,
+             mode: kIsWeb
+                 ? LaunchMode.platformDefault
+                 : LaunchMode.externalApplication,
+             webOnlyWindowName: '_self',
+           )) {
     thumbnails = ThumbnailCache(createThumbnailStorage(), report);
     peers = DirectPeers(this.api, this.local, report, thumbnails, (
       asset,
@@ -146,7 +152,7 @@ class HavenController extends ChangeNotifier {
   }
 
   int _authGeneration = 0;
-  Future<void> signIn({bool development = false}) async {
+  Future<void> signIn({bool development = false, bool browser = false}) async {
     if (busy) return;
     final generation = ++_authGeneration;
     busy = true;
@@ -157,10 +163,11 @@ class HavenController extends ChangeNotifier {
         await api.setToken(result['token']);
         await connect();
       } else if (kIsWeb) {
-        await launchUrl(
+        if (!await openNativeBrowser(
           Uri.parse('${api.base}/auth/gravitas/start'),
-          webOnlyWindowName: '_self',
-        );
+        )) {
+          throw StateError('Could not open sign-in page. Try again.');
+        }
       } else {
         final pending = await api.restoreNativeLogin();
         if (generation != _authGeneration || _disposed) return;
@@ -178,7 +185,9 @@ class HavenController extends ChangeNotifier {
         final state = base64UrlEncode(
           List<int>.generate(32, (_) => random.nextInt(256)),
         ).replaceAll('=', '');
-        final broker = await brokerAuthorize(api.base, challenge, state);
+        final broker = browser
+            ? null
+            : await brokerAuthorize(api.base, challenge, state);
         if (generation != _authGeneration || _disposed) return;
         if (broker != null) {
           try {
@@ -235,9 +244,20 @@ class HavenController extends ChangeNotifier {
         report('$e');
       }
     } finally {
-      busy = false;
-      changed();
+      if (generation == _authGeneration) {
+        busy = false;
+        changed();
+      }
     }
+  }
+
+  Future<void> cancelSignIn() async {
+    _authGeneration++;
+    await api.saveNativeLogin(null);
+    busy = false;
+    report(
+      'Sign-in cancelled. Try Private Store again or use browser sign-in.',
+    );
   }
 
   Future<void> _finishNativeLogin(Json login, int generation) async {
@@ -282,6 +302,7 @@ class HavenController extends ChangeNotifier {
 
   Future<void> logout() async {
     _authGeneration++;
+    busy = false;
     await api.saveNativeLogin(null);
     _timer?.cancel();
     _reportTimer?.cancel();

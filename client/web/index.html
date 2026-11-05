@@ -41,6 +41,17 @@
     For more details:
     * https://docs.flutter.dev/platform-integration/web/initialization
   -->
+  <div id="haven-loading" style="font:18px system-ui;max-width:36rem;margin:10vh auto;padding:2rem">
+    <h1>Haven</h1>
+    <p>Opening your library…</p>
+    <p>If Haven does not load, <a href="/login">sign in with Gravitas</a> or reload this page.</p>
+  </div>
+  <script>
+    window.addEventListener('flutter-first-frame', function () {
+      document.getElementById('haven-loading')?.remove();
+    });
+  </script>
+  <noscript>JavaScript is needed to view your library. <a href="/login">Sign in</a>.</noscript>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
