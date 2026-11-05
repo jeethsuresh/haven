@@ -118,6 +118,7 @@ void main() {
       await login;
       expect(api.token, null);
       expect(pending.ready, false);
+      expect(pending.busy, false);
       expect(
         await const FlutterSecureStorage().read(key: 'haven:${api.base}'),
         null,

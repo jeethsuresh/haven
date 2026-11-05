@@ -302,6 +302,7 @@ class HavenController extends ChangeNotifier {
 
   Future<void> logout() async {
     _authGeneration++;
+    busy = false;
     await api.saveNativeLogin(null);
     _timer?.cancel();
     _reportTimer?.cancel();
