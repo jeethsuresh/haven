@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "versionCode": 1,
   "changes": [
-    "Sign in on Android through your Private Store account, with browser sign-in available as a fallback.",
-    "Recover from expired or cancelled website sign-in and return to Haven."
+    "Swipe inward from the left edge to go back and from the right edge to go forward on Android 14 and later.",
+    "Return to previous browsing destinations without repeating actions; opening a new destination clears forward history."
   ]
 }

@@ -9,14 +9,14 @@ import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
 import android.util.Size
-import io.flutter.embedding.android.FlutterActivity
+import cool.gravitas.navigation.GravitasFlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.io.ByteArrayOutputStream
 import java.io.FileInputStream
 import java.util.concurrent.Executors
 
-class MainActivity : FlutterActivity() {
+class MainActivity : GravitasFlutterActivity() {
     private val worker = Executors.newSingleThreadExecutor()
     private var pending: MethodChannel.Result? = null
     private var asked = false
