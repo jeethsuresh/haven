@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import 'gravitas_navigation.dart';
 import 'controller.dart';
 import 'model.dart';
 
@@ -11,12 +13,20 @@ const ink = Color(0xFF193D34),
     canvas = Color(0xFFF5F6F2),
     muted = Color(0xFF6D7D76);
 
-class HavenApp extends StatelessWidget {
+class HavenApp extends StatefulWidget {
   final HavenController? controller;
   const HavenApp({super.key, this.controller});
   @override
+  State<HavenApp> createState() => _HavenAppState();
+}
+
+class _HavenAppState extends State<HavenApp> {
+  final history = GravitasNavigationObserver();
+  @override
   Widget build(BuildContext context) => MaterialApp(
     title: 'Haven',
+    navigatorObservers: [history],
+    builder: (_, child) => GravitasNavigation(observer: history, child: child!),
     debugShowCheckedModeBanner: false,
     theme: ThemeData(
       useMaterial3: true,
@@ -45,7 +55,7 @@ class HavenApp extends StatelessWidget {
         ),
       ),
     ),
-    home: HavenHome(controller: controller),
+    home: HavenHome(controller: widget.controller),
   );
 }
 
@@ -59,6 +69,7 @@ class HavenHome extends StatefulWidget {
 class _HavenHomeState extends State<HavenHome> {
   late final HavenController c;
   String section = 'All media', query = '';
+  String? historyAccount;
   final search = TextEditingController();
   @override
   void initState() {
@@ -92,39 +103,54 @@ class _HavenHomeState extends State<HavenHome> {
     if (c.loading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
+    if (historyAccount != c.account || !c.ready) {
+      historyAccount = c.account;
+      GravitasNavigation.of(context)?.clear();
+    }
     if (!c.ready) return _login();
     final wide = MediaQuery.sizeOf(context).width > 900;
-    return Scaffold(
-      appBar: wide ? null : AppBar(title: const Text('Haven')),
-      drawer: wide ? null : Drawer(child: _sidebar()),
-      body: Row(
-        children: [
-          if (wide) SizedBox(width: 238, child: _sidebar()),
-          Expanded(
-            child: Column(
-              children: [
-                Expanded(child: _body(wide)),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 28,
-                    vertical: 12,
+    return HistoryBoundary(
+      key: ValueKey(c.account),
+      value: (section: section, query: query),
+      sameDestination: (a, b) => a.section == b.section,
+      restore: (visit) => setState(() {
+        section = visit.section;
+        query = visit.query;
+        search.text = query;
+      }),
+      child: Scaffold(
+        drawerEnableOpenDragGesture: false,
+        appBar: wide ? null : AppBar(title: const Text('Haven')),
+        drawer: wide ? null : Drawer(child: _sidebar()),
+        body: Row(
+          children: [
+            if (wide) SizedBox(width: 238, child: _sidebar()),
+            Expanded(
+              child: Column(
+                children: [
+                  Expanded(child: _body(wide)),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 28,
+                      vertical: 12,
+                    ),
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      border: Border(top: BorderSide(color: Color(0xFFE4E9E3))),
+                    ),
+                    child: Text(
+                      c.message,
+                      style: const TextStyle(fontSize: 12, color: muted),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    border: Border(top: BorderSide(color: Color(0xFFE4E9E3))),
-                  ),
-                  child: Text(
-                    c.message,
-                    style: const TextStyle(fontSize: 12, color: muted),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -979,6 +1005,11 @@ class _HavenHomeState extends State<HavenHome> {
   String _deviceName(String id) =>
       c.devices.where((d) => d['id'] == id).firstOrNull?['name'] ?? 'Device';
   void _details(MediaAsset a) => showModalBottomSheet(
+    routeSettings: RouteSettings(
+      arguments: HistoryDestination(() {
+        if (c.assets.any((item) => item.id == a.id)) _details(a);
+      }),
+    ),
     context: context,
     showDragHandle: true,
     isScrollControlled: true,
