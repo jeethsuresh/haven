@@ -102,6 +102,18 @@ The IAM module was adapted from the local River backend and its tests retained.
 Sessions require a fresh login after eight hours, or sooner if Gravitas revokes
 the family. Local sign-out remains usable during an IAM outage.
 
+Android first uses Private Store 0.6.9 or newer for native sign-in. Both apps verify
+the permanent package/certificate identity, and Haven redeems only a one-use,
+PKCE-bound code for its own session. The Store needs an active account and prior
+Haven consent. Missing Store/sign-in/consent uses the browser; cancellation stays
+cancelled. **Sign in using browser** bypasses the Store, and **Cancel sign-in**
+ends a pending attempt. Desktop keeps its existing native Store broker.
+
+The server-rendered `/login` page works independently of Flutter loading. Expired
+or cancelled web callbacks offer a fresh sign-in, preserving a validated local
+return destination, including an Android approval. The page and all auth
+responses are uncached; authorization codes never appear in recovery links.
+
 STUN discovers peer addresses; it does **not** relay media. The service coordinates
 SDP/ICE over HTTPS, and the optional Coturn sidecar accepts **STUN only**.
 `HAVEN_STUN_URLS` accepts only `stun:` URLs, and clients reject relay candidates.
@@ -122,8 +134,8 @@ viewers can read the latest persisted reports even after a device goes offline.
 This establishes the architecture and first media flow, not a production release:
 
 - Android background/foreground-service lifecycle, charging/Wi-Fi policies,
-  permission recovery, paged gallery discovery, and native Private Store account
-  broker integration remain to be added. Browser-based Gravitas login is wired.
+  permission recovery and paged gallery discovery remain to be added. Native
+  Private Store login and browser-based Gravitas fallback are wired.
 - Native contacts/notes adapters and editors are scaffolded. Their payloads use
   the peer byte path; the backend holds only their descriptors.
 - Renames and deletions do not propagate as destructive operations. A rename is

@@ -64,6 +64,21 @@ jobs:
         run: |
           flutter pub get --enforce-lockfile
           flutter build apk --debug --no-pub --dart-define=HAVEN_BACKEND=https://haven.gravitas.cool
+      - name: Test native Store login bindings and fallback policy
+        working-directory: client/android
+        run: ./gradlew --no-daemon :app:testDebugUnitTest
+      - name: Enable KVM for native sign-in smoke test
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Exercise native broker channel and encrypted browser recovery
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          api-level: 35
+          arch: x86_64
+          disable-animations: true
+          script: cd client && flutter test integration_test/android_login_smoke.dart --no-pub -d emulator-5554
       - name: Compile the exact release command with a disposable CI certificate
         run: python3 scripts/test-release-compile.py
   image:
