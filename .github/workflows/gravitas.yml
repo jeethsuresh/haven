@@ -106,7 +106,7 @@ jobs:
           context: .
           platforms: linux/amd64
           push: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' }}
-          tags: ghcr.io/jeethsuresh/haven:${{ github.sha }}
+          tags: ghcr.io/jeethsuresh/haven-private:${{ github.sha }}
           labels: org.opencontainers.image.source=https://github.com/jeethsuresh/haven
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -134,7 +134,7 @@ jobs:
         uses: ./.gravitas-runtime
         with:
           config: .gravitas/deploy.json
-          image: ghcr.io/jeethsuresh/haven@${{ needs.image.outputs.digest }}
+          image: ghcr.io/jeethsuresh/haven-private@${{ needs.image.outputs.digest }}
           kubeconfig: ${{ secrets.GRAVITAS_KUBECONFIG }}
   android-release:
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
