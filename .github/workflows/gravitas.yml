@@ -198,6 +198,7 @@ jobs:
       - name: Publish verified stable APK for Private Store
         if: steps.plan.outputs.publish == 'true'
         env:
+          ANDROID_DEVELOPER_ID_STATUS_API_KEY: ${{ secrets.ANDROID_DEVELOPER_ID_STATUS_API_KEY }}
           GH_TOKEN: ${{ github.token }}
         run: python3 scripts/android-release.py publish
 
