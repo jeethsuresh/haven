@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"github.com/jeethsuresh/haven/backend/internal/storecatalog"
 	"html"
 	"net/http"
 	"net/http/httptest"
@@ -184,6 +185,7 @@ func (s *Server) authRoutes(m *http.ServeMux) {
 			fail(w, 500, "storage_failed")
 			return
 		}
+		storecatalog.Register(r.Context(), auth.Issuer, auth.CheckToken)
 		s.setCookie(w, token, int(expires-time.Now().Unix()))
 		http.Redirect(w, r, next, http.StatusSeeOther)
 	})
@@ -230,6 +232,7 @@ func (s *Server) authRoutes(m *http.ServeMux) {
 			fail(w, 500, "storage_failed")
 			return
 		}
+		storecatalog.Register(r.Context(), auth.Issuer, auth.CheckToken)
 		reply(w, 200, map[string]string{"token": token})
 	})
 	m.HandleFunc("POST /api/auth/native/start", func(w http.ResponseWriter, r *http.Request) {

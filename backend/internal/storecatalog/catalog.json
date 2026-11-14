@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "revision": 1,
+  "apps": [
+    {
+      "id": "haven",
+      "name": "Haven",
+      "packageName": "cool.gravitas.haven",
+      "repository": "jeethsuresh/haven",
+      "assetName": "Haven-{tag}-android.apk",
+      "certificateSha256": "3c01375ebd40c543f9d6d1a6c1aeb18c689188eee35341a3b1ba3b89a397c085",
+      "description": "Back up photos, videos and audio from your Android phone to a desktop you own. Choose what to copy and where to keep it, then browse your library and check which devices have copies. Transfers run while Haven is open.",
+      "desktop": true,
+      "website": "https://haven.gravitas.cool",
+      "macOSNotarizedFrom": 1005
+    }
+  ]
+}

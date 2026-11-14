@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"github.com/jeethsuresh/haven/backend/internal/storecatalog"
 	"log"
 	"net"
 	"net/http"
@@ -54,6 +56,7 @@ func main() {
 		s.stunURLs = append(s.stunURLs, raw)
 	}
 	server := &http.Server{Addr: listen, Handler: s.handler(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16384}
+	go storecatalog.Run(context.Background())
 	log.Printf("Haven listening on %s (development=%t)", listen, dev)
 	log.Fatal(server.ListenAndServe())
 }
