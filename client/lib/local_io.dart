@@ -7,6 +7,8 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'apple_photos.dart';
+import 'apple_photos_archive.dart';
 import 'model.dart';
 
 LocalRepository createRepository() => DiskRepository();
@@ -24,6 +26,9 @@ class _DigestSink implements Sink<Digest> {
 
 class DiskRepository extends LocalRepository {
   static const channel = MethodChannel('cool.gravitas.haven/media');
+  static const _photosImport = MethodChannel(
+    'cool.gravitas.haven/photos_import',
+  );
   late File _index;
   Future<void> _writes = Future.value();
   @override
@@ -82,15 +87,103 @@ class DiskRepository extends LocalRepository {
   }
 
   @override
-  Future<String?> chooseDirectory() => FilePicker.getDirectoryPath();
+  Future<ApplePhotosImportResult?> importApplePhotos(
+    void Function(int done, int total) progress,
+  ) async {
+    if (!Platform.isMacOS) {
+      throw UnsupportedError('Apple Photos import requires macOS.');
+    }
+    final repository = root;
+    final hasMediaFolder = mediaRoot.isNotEmpty;
+    final media = hasMediaFolder ? mediaRoot : p.join(repository, 'Media');
+    if (repository.isEmpty ||
+        !await Directory(repository).exists() ||
+        (hasMediaFolder && !await Directory(media).exists())) {
+      throw StateError('Connect your Haven storage folder and retry.');
+    }
+    final path = await _photosImport.invokeMethod<String>('chooseLibrary');
+    if (path == null) return null;
+    final library = await ApplePhotosLibrary.read(path);
+    for (final directory in {repository, if (hasMediaFolder) media}) {
+      final resolved = await Directory(directory).resolveSymbolicLinks();
+      if (p.equals(resolved, library.directory.path) ||
+          p.isWithin(library.directory.path, resolved)) {
+        throw StateError(
+          'Choose Haven storage outside the Apple Photos library.',
+        );
+      }
+    }
+    return copyApplePhotos(
+      library,
+      media: (relative) => !hasMediaFolder
+          ? _safeFile(repository, 'Media/$relative')
+          : _safeFile(media, relative),
+      files: (relative) => _safeFile(repository, 'Files/$relative'),
+      mime: _mime,
+      progress: progress,
+    );
+  }
+
+  @override
+  Future<ApplePhotosArchiveResult?> archiveApplePhotosLibrary() async {
+    final repository = root;
+    if (repository.isEmpty || !await Directory(repository).exists()) {
+      throw StateError('Connect your Haven storage folder and retry.');
+    }
+    final path = await _photosImport.invokeMethod<String>('chooseLibrary');
+    if (path == null) return null;
+    final source = await Directory(path).resolveSymbolicLinks();
+    final target = await Directory(repository).resolveSymbolicLinks();
+    if (p.equals(source, target) || p.isWithin(source, target)) {
+      throw StateError(
+        'Choose Haven storage outside the Apple Photos library.',
+      );
+    }
+    final staging = await _safeFile(repository, '.haven/archive-staging/item');
+    return archiveApplePhotos(
+      path,
+      staging.parent,
+      (relative) =>
+          _safeFile(repository, 'Files/Apple Photos Archives/$relative'),
+    );
+  }
+
+  @override
+  Future<String?> restoreApplePhotosLibrary() async {
+    final archive = await _photosImport.invokeMethod<String>('chooseArchive');
+    if (archive == null) return null;
+    final folder = await _photosImport.invokeMethod<String>(
+      'chooseRestoreFolder',
+    );
+    if (folder == null) return null;
+    return restoreApplePhotosArchive(File(archive), Directory(folder));
+  }
+
+  @override
+  Future<String?> chooseDirectory() => Platform.isMacOS
+      ? _photosImport.invokeMethod<String>('chooseFolder')
+      : FilePicker.getDirectoryPath();
   String _mime(String path) => switch (p.extension(path).toLowerCase()) {
     '.jpg' || '.jpeg' => 'image/jpeg',
     '.png' => 'image/png',
     '.webp' => 'image/webp',
     '.gif' => 'image/gif',
     '.heic' => 'image/heic',
+    '.heif' => 'image/heif',
+    '.tif' || '.tiff' => 'image/tiff',
+    '.bmp' => 'image/bmp',
+    '.dng' => 'image/x-adobe-dng',
+    '.cr2' || '.cr3' => 'image/x-canon-raw',
+    '.nef' || '.nrw' => 'image/x-nikon-raw',
+    '.arw' => 'image/x-sony-arw',
+    '.raf' => 'image/x-fuji-raf',
+    '.orf' => 'image/x-olympus-orf',
+    '.rw2' => 'image/x-panasonic-rw2',
+    '.avif' => 'image/avif',
     '.mp4' => 'video/mp4',
     '.mov' => 'video/quicktime',
+    '.m4v' => 'video/mp4',
+    '.avi' => 'video/x-msvideo',
     '.mkv' => 'video/x-matroska',
     '.mp3' => 'audio/mpeg',
     '.wav' => 'audio/wav',
@@ -119,6 +212,9 @@ class DiskRepository extends LocalRepository {
       await for (final entity in d.list(followLinks: false)) {
         if (p.basename(entity.path).startsWith('.haven')) continue;
         if (entity is Directory) {
+          if (p.extension(entity.path).toLowerCase() == '.photoslibrary') {
+            continue;
+          }
           await visit(entity);
         } else if (entity is File) {
           entries.add(await _entry(entity));
