@@ -1,7 +1,9 @@
 import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
+
 import 'model.dart';
 
 class ApiError implements Exception {
@@ -28,26 +30,29 @@ class HavenApi {
     'X-Haven-CSRF': '1',
     if (token != null) 'Authorization': 'Bearer $token',
   };
+  Future<String?> readLocalSecret(String key) => const FlutterSecureStorage(
+    mOptions: MacOsOptions(usesDataProtectionKeychain: false),
+  ).read(key: key);
+
+  Future<void> writeLocalSecret(String key, String? value) {
+    const storage = FlutterSecureStorage(
+      mOptions: MacOsOptions(usesDataProtectionKeychain: false),
+    );
+    return value == null
+        ? storage.delete(key: key)
+        : storage.write(key: key, value: value);
+  }
+
   Future<void> restore() async {
     if (!kIsWeb) {
-      token = await const FlutterSecureStorage(
-        mOptions: MacOsOptions(usesDataProtectionKeychain: false),
-      ).read(key: 'haven:$base');
+      token = await readLocalSecret('haven:$base');
     }
   }
 
   Future<void> setToken(String? value) async {
     token = value;
     if (!kIsWeb) {
-      if (value == null) {
-        await const FlutterSecureStorage(
-          mOptions: MacOsOptions(usesDataProtectionKeychain: false),
-        ).delete(key: 'haven:$base');
-      } else {
-        await const FlutterSecureStorage(
-          mOptions: MacOsOptions(usesDataProtectionKeychain: false),
-        ).write(key: 'haven:$base', value: value);
-      }
+      await writeLocalSecret('haven:$base', value);
     }
   }
 
@@ -55,9 +60,7 @@ class HavenApi {
   // encrypted storage until the device session has been saved or login expires.
   Future<Json?> restoreNativeLogin() async {
     if (kIsWeb) return null;
-    final raw = await const FlutterSecureStorage(
-      mOptions: MacOsOptions(usesDataProtectionKeychain: false),
-    ).read(key: 'haven:$base:pending-login');
+    final raw = await readLocalSecret('haven:$base:pending-login');
     if (raw == null) return null;
     try {
       final pending = jsonDecode(raw) as Json;
@@ -80,15 +83,8 @@ class HavenApi {
 
   Future<void> saveNativeLogin(Json? pending) async {
     if (kIsWeb) return;
-    const storage = FlutterSecureStorage(
-      mOptions: MacOsOptions(usesDataProtectionKeychain: false),
-    );
     final key = 'haven:$base:pending-login';
-    if (pending == null) {
-      await storage.delete(key: key);
-    } else {
-      await storage.write(key: key, value: jsonEncode(pending));
-    }
+    await writeLocalSecret(key, pending == null ? null : jsonEncode(pending));
   }
 
   Future<dynamic> request(String method, String path, [Json? body]) async {
