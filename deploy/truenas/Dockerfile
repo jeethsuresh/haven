@@ -22,7 +22,8 @@ LABEL org.opencontainers.image.source="https://github.com/jeethsuresh/haven"
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates fonts-dejavu-core libgtk-3-0t64 libsecret-1-0 libjsoncpp25 \
     liblzma5 libssl3t64 libpulse0 libasound2t64 libgbm1 libgl1 libnss3 \
-    libxss1 libx11-xcb1 libxdamage1 libxrandr2 libgl1-mesa-dri util-linux xvfb xauth \
+    libxss1 libx11-xcb1 libxdamage1 libxrandr2 libgl1-mesa-dri libegl1 libegl-mesa0 \
+    util-linux xvfb xauth \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=build /src/build/linux/*/release/bundle/ /app/
 COPY truenas-entrypoint.sh /app/entrypoint.sh
