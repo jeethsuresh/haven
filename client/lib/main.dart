@@ -526,6 +526,34 @@ class _HavenHomeState extends State<HavenHome> {
                   ),
               ],
             ),
+            if (media && c.isMacOS)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    if (c.canImportApplePhotos) ...[
+                      OutlinedButton.icon(
+                        onPressed: c.busy ? null : c.importApplePhotos,
+                        icon: const Icon(
+                          Icons.photo_library_outlined,
+                          size: 18,
+                        ),
+                        label: const Text('Import Apple Photos Library'),
+                      ),
+                      OutlinedButton(
+                        onPressed: c.busy ? null : c.archiveApplePhotos,
+                        child: const Text('Back Up Photos Library'),
+                      ),
+                    ],
+                    OutlinedButton(
+                      onPressed: c.busy ? null : c.restoreApplePhotos,
+                      child: const Text('Restore Photos Library'),
+                    ),
+                  ],
+                ),
+              ),
             const SizedBox(height: 24),
             if (c.busy) const LinearProgressIndicator(),
             if (filtered.isEmpty)

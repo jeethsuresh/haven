@@ -55,6 +55,20 @@ class LocalRecord {
   Json toJson() => {'asset': asset.data, 'entry': entry.toJson()};
 }
 
+class ApplePhotosImportResult {
+  const ApplePhotosImportResult({
+    required this.files,
+    required this.albums,
+    required this.missingOriginals,
+    required this.missingEdits,
+    required this.missingLiveVideos,
+    required this.entries,
+  });
+
+  final int files, albums, missingOriginals, missingEdits, missingLiveVideos;
+  final List<LocalEntry> entries;
+}
+
 abstract class LocalRepository {
   String root = '';
   String mediaRoot = '';
@@ -63,6 +77,13 @@ abstract class LocalRepository {
   Future<void> save();
   Future<List<LocalEntry>> gallery();
   Future<List<LocalEntry>> pickFiles();
+  Future<ApplePhotosImportResult?> importApplePhotos(
+    void Function(int done, int total) progress,
+  ) async => throw UnsupportedError('Apple Photos import requires macOS.');
+  Future<ApplePhotosArchiveResult?> archiveApplePhotosLibrary() async =>
+      throw UnsupportedError('Apple Photos archives require macOS.');
+  Future<String?> restoreApplePhotosLibrary() async =>
+      throw UnsupportedError('Apple Photos restore requires macOS.');
   Future<String?> chooseDirectory();
   Future<List<LocalEntry>> scanRoot();
   Future<Uint8List> read(LocalEntry entry, int offset, int length);
@@ -72,6 +93,12 @@ abstract class LocalRepository {
   Future<void> append(MediaAsset asset, int offset, Uint8List bytes);
   Future<LocalEntry> commit(MediaAsset asset);
   Future<LocalEntry> relocate(LocalEntry entry, MediaAsset asset);
+}
+
+class ApplePhotosArchiveResult {
+  const ApplePhotosArchiveResult(this.entry, this.missingOriginals);
+  final LocalEntry entry;
+  final int missingOriginals;
 }
 
 String readableBytes(int n) {
