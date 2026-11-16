@@ -1,0 +1,4 @@
+load-module module-native-protocol-unix
+load-module module-null-sink sink_name=haven_null
+set-default-sink haven_null
+set-default-source haven_null.monitor

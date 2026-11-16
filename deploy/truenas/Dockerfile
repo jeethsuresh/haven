@@ -23,10 +23,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates fonts-dejavu-core libgtk-3-0t64 libsecret-1-0 libjsoncpp25 \
     liblzma5 libssl3t64 libpulse0 libasound2t64 libgbm1 libgl1 libnss3 \
     libxss1 libx11-xcb1 libxdamage1 libxrandr2 libgl1-mesa-dri libegl1 libegl-mesa0 libgles2 \
-    util-linux xvfb xauth \
+    pulseaudio util-linux xvfb xauth \
     && rm -rf /var/lib/apt/lists/*
+RUN groupadd --gid 568 haven && useradd --uid 568 --gid 568 --home-dir /state --no-create-home haven
 COPY --from=build /src/build/linux/*/release/bundle/ /app/
 COPY truenas-entrypoint.sh /app/entrypoint.sh
+COPY truenas-pulse.pa /app/pulse.pa
 ENV XDG_CONFIG_HOME=/state/config XDG_CACHE_HOME=/state/cache XDG_DATA_HOME=/state/data \
     GTK_A11Y=none GDK_BACKEND=x11 LIBGL_ALWAYS_SOFTWARE=1
 USER 568:568

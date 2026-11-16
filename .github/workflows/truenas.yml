@@ -9,6 +9,7 @@ on:
       - 'client/pubspec.*'
       - 'client/.dockerignore'
       - 'client/truenas-entrypoint.sh'
+      - 'client/truenas-pulse.pa'
       - 'deploy/truenas/**'
   workflow_dispatch:
 
@@ -33,23 +34,12 @@ jobs:
             ldd /app/haven /app/lib/libflutter_webrtc_plugin.so > /tmp/runtime-libs
             if grep -q "not found" /tmp/runtime-libs; then cat /tmp/runtime-libs; exit 1; fi
           '
-      - name: Start the sink with writable test datasets
-        run: |
-          image=localhost/haven-truenas-sink:0.1.0
-          trap 'docker rm -f haven-smoke >/dev/null 2>&1 || true; docker volume rm haven-smoke-state haven-smoke-repo >/dev/null 2>&1 || true' EXIT
-          docker volume create haven-smoke-state
-          docker volume create haven-smoke-repo
-          docker run --rm --user 0 --entrypoint /bin/sh \
-            -v haven-smoke-state:/state -v haven-smoke-repo:/repository \
-            "$image" -ec 'chown 568:568 /state /repository'
-          docker run --detach --name haven-smoke --read-only --cap-drop ALL \
-            --security-opt no-new-privileges --tmpfs /tmp:rw,mode=1777 \
-            -v haven-smoke-state:/state -v haven-smoke-repo:/repository \
-            -e HAVEN_BACKEND_URL=https://127.0.0.1:9 "$image"
-          sleep 10
-          docker logs haven-smoke
-          test "$(docker inspect haven-smoke --format '{{.State.Running}}')" = true
-          docker exec haven-smoke test -f /repository/.haven-sink.lock
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.2'
+          cache: false
+      - name: Transfer and verify an archive between two native sinks
+        run: bash deploy/truenas/smoke/test.sh localhost/haven-truenas-sink:0.1.0
       - name: Save the installable image and configuration
         run: |
           set -o pipefail
