@@ -2,8 +2,8 @@
   "name": "Haven",
   "directory": "client",
   "engine": "flutter",
-  "version": "0.1.6",
-  "versionCode": 1006,
+  "version": "0.1.7",
+  "versionCode": 1007,
   "flutterVersion": "3.47.7",
   "flutterRevision": "abaf9c523780a608bd46686fd5e53740a07077f8",
   "defines": [

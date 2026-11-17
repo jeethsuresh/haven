@@ -77,6 +77,9 @@ class HavenController extends ChangeNotifier {
   bool get isAndroid =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
   bool get isDesktop => !kIsWeb && !isAndroid;
+  bool get isMacOS => !kIsWeb && defaultTargetPlatform == TargetPlatform.macOS;
+  bool get canImportApplePhotos =>
+      isMacOS && roles.any((role) => role == 'sink' || role == 'source');
   String get platform => kIsWeb
       ? 'web'
       : isAndroid
@@ -442,6 +445,93 @@ class HavenController extends ChangeNotifier {
       recordIssue('scan', '$e', '');
       await sendReport().catchError((Object _) {});
       report('$e');
+    } finally {
+      _scanning = false;
+      busy = false;
+      changed();
+    }
+  }
+
+  Future<void> importApplePhotos() async {
+    if (!canImportApplePhotos || _scanning || _ticking || !ready) return;
+    final importingAccount = account;
+    _scanning = true;
+    busy = true;
+    changed();
+    try {
+      final result = await local.importApplePhotos((done, total) {
+        if (!ready || account != importingAccount || _disposed) {
+          throw StateError(
+            'Apple Photos import stopped because the session changed.',
+          );
+        }
+        report('Importing Apple Photos: ${done + 1} of $total…');
+      });
+      if (result == null ||
+          !ready ||
+          account != importingAccount ||
+          _disposed) {
+        return;
+      }
+      await publishEntries(result.entries);
+      final scanIssues = _indexPending.isEmpty
+          ? ''
+          : ' ${_indexPending.length} files are waiting to be indexed.';
+      final unavailable =
+          result.missingOriginals +
+          result.missingEdits +
+          result.missingLiveVideos;
+      _scanned = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+      await sendReport();
+      await refresh();
+      final summary =
+          'Verified ${result.files} media files on disk. '
+          'Saved membership for ${result.albums} albums.';
+      final missing = unavailable == 0
+          ? ''
+          : ' Unavailable: ${result.missingOriginals} originals, '
+                '${result.missingEdits} edits, ${result.missingLiveVideos} Live Photo videos.';
+      report('$summary$missing$scanIssues');
+    } catch (e) {
+      report('Apple Photos import stopped. $e Try importing again to resume.');
+    } finally {
+      _scanning = false;
+      busy = false;
+      changed();
+    }
+  }
+
+  Future<void> archiveApplePhotos() => _runApplePhotosArchive(() async {
+    if (!canImportApplePhotos) return;
+    final importer = account;
+    report('Preparing the Apple Photos archive. Keep Photos closed.');
+    final result = await local.archiveApplePhotosLibrary();
+    if (result == null || !ready || importer != account || _disposed) return;
+    await publishEntries([result.entry]);
+    final pending = _indexPending.isEmpty
+        ? ''
+        : ' It is waiting to be indexed.';
+    final missing = result.missingOriginals == 0
+        ? ''
+        : ' ${result.missingOriginals} originals were outside the package or unavailable.';
+    report('Verified the Apple Photos archive on disk.$missing$pending');
+  });
+
+  Future<void> restoreApplePhotos() => _runApplePhotosArchive(() async {
+    report('Preparing to restore the Apple Photos archive.');
+    final path = await local.restoreApplePhotosLibrary();
+    if (path != null) report('Verified and restored: $path');
+  });
+
+  Future<void> _runApplePhotosArchive(Future<void> Function() action) async {
+    if (!isMacOS || _scanning || _ticking || !ready) return;
+    _scanning = true;
+    busy = true;
+    changed();
+    try {
+      await action();
+    } catch (e) {
+      report('Apple Photos archive: $e');
     } finally {
       _scanning = false;
       busy = false;

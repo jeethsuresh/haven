@@ -44,6 +44,26 @@ sink mode. To try a source without Android, enable **Source** on a second deskto
 instance and press **Scan now** to pick files. Use separate application data
 directories or OS users for two independent desktop identities.
 
+On macOS, enable **Sink** and choose the mounted NAS share as the repository
+folder. From **Media**, choose **Import Apple Photos Library** and select a
+`.photoslibrary` package. Haven reads the package directly and copies local
+originals, Live Photo companions, paired RAW files, and available rendered edits.
+Haven reports unavailable files, including originals that are only in iCloud
+or stored as references outside the package.
+
+The import includes locally available hidden items and skips Recently Deleted.
+Haven stores media under `Media/Apple Photos/` (or the chosen media folder)
+and writes a JSON manifest under `Files/Apple Photos/` with regular album
+membership, folder hierarchy, and paths to originals and edited versions.
+Use **Back Up Photos Library** with Apple Photos closed to also preserve the
+whole package, including reversible edits. Haven checks the Photos database,
+verifies the archive, and stores it under `Files/Apple Photos Archives/`.
+If originals are only in iCloud or referenced outside the package, download
+or consolidate them before making your final backup. **Restore Photos Library**
+checks the archive and database and creates a new library on a local APFS or
+Mac OS Extended volume. The local restore volume needs space for the archive
+and the extracted library. Open the restored package in Photos from that volume.
+
 For an attached Android device or emulator:
 
 ```bash
