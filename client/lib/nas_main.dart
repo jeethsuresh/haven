@@ -1,27 +1,33 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/widgets.dart';
+import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 
 import 'api.dart';
 import 'controller.dart';
 import 'local_io.dart';
+import 'model.dart';
 
 /// A TrueNAS sink uses the native peer engine independently of the desktop UI.
-Future<void> main() async {
+Future<void> main() => runNas();
+
+Future<void> runNas({bool smokeSource = false}) async {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const SizedBox.shrink());
   try {
-    await _run();
+    await _run(smokeSource);
   } catch (error) {
     stderr.writeln('Haven sink stopped: $error');
     exit(1);
   }
 }
 
-Future<void> _run() async {
+Future<void> _run(bool smokeSource) async {
   final env = Platform.environment;
   final url = Uri.parse(
     env['HAVEN_BACKEND_URL'] ?? 'https://haven.gravitas.cool',
@@ -49,46 +55,75 @@ Future<void> _run() async {
   }
   final session = _NasSessionApi(url.origin, state);
   final disk = _NasRepository(repository, media);
-  final approval = File('/state/approval-url');
-  final controller = HavenController(
-    api: session,
-    local: disk,
-    brokerAuthorize: (_, _, _) async => null,
-    openNativeBrowser: (uri) async {
-      if (uri.origin != url.origin) return false;
-      await _writePrivate(approval, '$uri\n');
-      stdout.writeln(
-        'Haven sink requires approval. Read /state/approval-url from the container shell.',
-      );
-      return true;
-    },
-  );
+  final controller = HavenController(api: session, local: disk);
+  final approval = File(p.join(state.path, 'approval-url'));
+  final configuredName = env['HAVEN_DEVICE_NAME']?.trim() ?? '';
+  final name = configuredName.isEmpty ? 'TrueNAS Sink' : configuredName;
+  if (smokeSource) {
+    // The native integration test uses an ordinary, temporary source device.
+    await session.restore();
+    controller.config = await session.request('GET', '/api/config');
+    if (controller.config['dev'] != true) {
+      throw StateError('The smoke-test source requires a development backend.');
+    }
+    await controller.connect();
+    controller.name = name;
+    await controller.configure(['viewer', 'sink', 'source']);
+    return;
+  }
+
+  var waitingForBackend = false;
+  var credentialRejected = false;
   while (true) {
     try {
-      // Each approval URL is short-lived. Restarting starts a new request
-      // with a visible URL if the old approval had not yet been redeemed.
-      await session.saveNativeLogin(null);
-      if (await approval.exists()) await approval.delete();
-      await controller.initialize();
-      if (!controller.ready) await controller.signIn(browser: true);
-      if (controller.ready) {
+      await session.restore();
+      controller.config = await session.request('GET', '/api/config');
+      if (controller.config['unattended_sinks'] != true) {
+        if (!waitingForBackend) {
+          stdout.writeln(
+            'Waiting for a Haven server that supports unattended sinks.',
+          );
+        }
+        waitingForBackend = true;
+      } else {
+        waitingForBackend = false;
+        if (!session.hasSinkCredential) {
+          // A legacy login may be expired. Leave its stored token alone until
+          // the account owner has explicitly approved the new credential.
+          session.token = null;
+          await session.pair(name, approval);
+        }
+        await session.saveNativeLogin(null);
         if (await approval.exists()) await approval.delete();
-        final name = env['HAVEN_DEVICE_NAME']?.trim();
-        controller.name = name == null || name.isEmpty ? 'TrueNAS Sink' : name;
-        await controller.configure(['viewer', 'sink']);
+        await controller.connect(requireUnattendedSink: true);
+        credentialRejected = false;
         stdout.writeln('Haven sink connected. Waiting for verified transfers.');
         while (controller.ready) {
           await Future<void>.delayed(const Duration(seconds: 5));
         }
-        stdout.writeln('Haven sink session ended.');
       }
     } on ApiError catch (error) {
-      if (error.status == 403) rethrow;
-      stderr.writeln(
-        'Haven is temporarily unavailable (HTTP ${error.status}).',
-      );
+      if (error.status == 401 && session.hasSinkCredential) {
+        // Do not silently enroll again after the owner revokes this device.
+        if (!credentialRejected) {
+          stdout.writeln(
+            'Haven rejected this sink credential. Clear the credential in the private state dataset to pair again.',
+          );
+        }
+        credentialRejected = true;
+      } else if (error.status >= 500 || [408, 429].contains(error.status)) {
+        stderr.writeln(
+          'Haven is temporarily unavailable (HTTP ${error.status}).',
+        );
+      } else {
+        rethrow;
+      }
+    } on http.ClientException {
+      stderr.writeln('Haven is temporarily unreachable.');
+    } on TimeoutException {
+      stderr.writeln('Haven did not respond in time.');
     }
-    await Future<void>.delayed(const Duration(seconds: 10));
+    await Future<void>.delayed(Duration(seconds: credentialRejected ? 30 : 10));
   }
 }
 
@@ -121,6 +156,72 @@ class _NasRepository extends DiskRepository {
 class _NasSessionApi extends HavenApi {
   _NasSessionApi(String base, this.state) : super(base: base);
   final Directory state;
+  bool get hasSinkCredential => token?.startsWith('haven_sink_') == true;
+
+  Future<void> pair(String name, File approval) async {
+    while (true) {
+      var login = await restoreNativeLogin();
+      if (login == null || login['unattended'] != true) {
+        if (await approval.exists()) await approval.delete();
+        final random = Random.secure();
+        final verifier = base64UrlEncode(
+          List<int>.generate(32, (_) => random.nextInt(256)),
+        ).replaceAll('=', '');
+        final challenge = base64UrlEncode(
+          sha256.convert(utf8.encode(verifier)).bytes,
+        ).replaceAll('=', '');
+        final request =
+            await this.request('POST', '/api/auth/native/start', {
+                  'challenge': challenge,
+                  'platform': 'linux',
+                  'sink_name': name,
+                })
+                as Json;
+        final uri = Uri.parse(request['approval_url'] as String);
+        if (uri.origin != base || uri.userInfo.isNotEmpty) {
+          throw StateError('Haven returned an invalid approval URL.');
+        }
+        login = {
+          'id': request['id'],
+          'verifier': verifier,
+          'approval_url': uri.toString(),
+          'expires': DateTime.now()
+              .add(const Duration(minutes: 10))
+              .millisecondsSinceEpoch,
+          'unattended': true,
+        };
+        await saveNativeLogin(login);
+        stdout.writeln(
+          'Haven sink requires one-time approval. Read /state/approval-url from the container shell.',
+        );
+      }
+      await _writePrivate(approval, "${login['approval_url']}\n");
+      while (DateTime.now().millisecondsSinceEpoch < login['expires']) {
+        try {
+          final result =
+              await request('POST', '/api/auth/native/poll', {
+                    'id': login['id'],
+                    'verifier': login['verifier'],
+                  })
+                  as Json;
+          final credential = result['token'];
+          if (credential is String && credential.startsWith('haven_sink_')) {
+            await setToken(credential);
+            return;
+          }
+          if (result['status'] != 'pending') {
+            throw StateError('Haven did not issue a sink credential.');
+          }
+        } on ApiError catch (error) {
+          if (error.status == 404 || error.status == 409) break;
+          rethrow;
+        }
+        await Future<void>.delayed(const Duration(seconds: 3));
+      }
+      await saveNativeLogin(null);
+    }
+  }
+
   File _secret(String key) =>
       File(p.join(state.path, '.session-${sha256.convert(utf8.encode(key))}'));
   @override

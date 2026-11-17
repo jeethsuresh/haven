@@ -14,8 +14,10 @@ COPY pubspec.yaml pubspec.lock ./
 RUN flutter pub get --enforce-lockfile
 COPY lib/ ./lib/
 COPY linux/ ./linux/
+COPY integration_test/truenas_smoke_source.dart ./integration_test/
+ARG HAVEN_LINUX_TARGET=lib/nas_main.dart
 RUN flutter pub get --offline --enforce-lockfile \
-    && flutter build linux --release --no-pub --target lib/nas_main.dart
+    && flutter build linux --release --no-pub --target "$HAVEN_LINUX_TARGET"
 
 FROM ubuntu:24.04
 LABEL org.opencontainers.image.source="https://github.com/jeethsuresh/haven"

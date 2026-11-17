@@ -3,6 +3,7 @@ set -euo pipefail
 
 # This test is for a disposable native Linux runner with Docker and sudo.
 image="$1"
+source_image="$2"
 scratch="$(mktemp -d)"
 backend_pid=
 proxy_pid=
@@ -47,13 +48,36 @@ curl --silent --show-error --fail --retry 5 --retry-connrefused --max-time 2 \
 "$scratch/probe" seed "$scratch"
 sudo chown -R 568:568 "$scratch"/{state-a,state-b,repo-a,repo-b}
 
-for side in a b; do
+run_container() {
+    local side="$1" container_image="$2"
     docker run --detach --name "haven-test-$side" --network host --read-only \
         --cap-drop ALL --security-opt no-new-privileges --tmpfs /tmp:rw,mode=1777 \
         -v "$scratch/state-$side:/state" -v "$scratch/repo-$side:/repository" \
         -v "$scratch/ca.crt:/etc/ssl/certs/ca-certificates.crt:ro" \
-        -e HAVEN_BACKEND_URL=https://127.0.0.1:45982 -e "HAVEN_DEVICE_NAME=Test sink $side" "$image"
+        -e HAVEN_BACKEND_URL=https://127.0.0.1:45982 -e "HAVEN_DEVICE_NAME=Test device $side" "$container_image"
+}
+wait_for_sink() {
+    local connections="$1"
+    for attempt in $(seq 1 30); do
+        if [[ "$(docker logs haven-test-b 2>&1 | grep -c 'Waiting for verified transfers' || true)" -ge "$connections" ]]; then
+            sudo "$scratch/probe" paired "$scratch"
+            return
+        fi
+        sleep 2
+    done
+    docker logs haven-test-b >&2
+    return 1
+}
+run_container b "$image"
+for attempt in $(seq 1 30); do
+    if sudo test -s "$scratch/state-b/approval-url"; then break; fi
+    sleep 2
 done
+sudo "$scratch/probe" approve "$scratch"
+paired_id="$(wait_for_sink 1)"
+docker restart --timeout 10 haven-test-b
+test "$(wait_for_sink 2)" = "$paired_id"
+run_container a "$source_image"
 
 for attempt in $(seq 1 40); do
     if sudo "$scratch/probe" check "$scratch" "$name" > "$scratch/result.log" 2>&1; then

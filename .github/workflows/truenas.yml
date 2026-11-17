@@ -6,6 +6,8 @@ on:
       - '.github/workflows/truenas.yml'
       - 'client/lib/**'
       - 'client/linux/**'
+      - 'client/integration_test/truenas_smoke_source.dart'
+      - 'backend/**'
       - 'client/pubspec.*'
       - 'client/.dockerignore'
       - 'client/truenas-entrypoint.sh'
@@ -23,11 +25,11 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - name: Build the x86-64 sink
-        run: docker build -f deploy/truenas/Dockerfile -t localhost/haven-truenas-sink:0.1.0 client
+        run: docker build -f deploy/truenas/Dockerfile -t localhost/haven-truenas-sink:0.2.0 client
       - name: Check the runtime executable and permissions
         run: |
-          test "$(docker image inspect localhost/haven-truenas-sink:0.1.0 --format '{{.Config.User}}')" = 568:568
-          docker run --rm --entrypoint /bin/sh localhost/haven-truenas-sink:0.1.0 -ec '
+          test "$(docker image inspect localhost/haven-truenas-sink:0.2.0 --format '{{.Config.User}}')" = 568:568
+          docker run --rm --entrypoint /bin/sh localhost/haven-truenas-sink:0.2.0 -ec '
             test -x /app/haven
             test -f /app/lib/libapp.so
             test -x /usr/bin/Xvfb
@@ -38,14 +40,18 @@ jobs:
         with:
           go-version: '1.25.2'
           cache: false
-      - name: Transfer and verify an archive between two native sinks
-        run: bash deploy/truenas/smoke/test.sh localhost/haven-truenas-sink:0.1.0
+      - name: Build the native test source
+        run: |
+          docker build -f deploy/truenas/Dockerfile -t haven-truenas-smoke-source \
+            --build-arg HAVEN_LINUX_TARGET=integration_test/truenas_smoke_source.dart client
+      - name: Pair once, restart the receiver and verify an archive transfer
+        run: bash deploy/truenas/smoke/test.sh localhost/haven-truenas-sink:0.2.0 haven-truenas-smoke-source
       - name: Save the installable image and configuration
         run: |
           set -o pipefail
           mkdir -p truenas-dist
           cp deploy/truenas/compose.yaml deploy/truenas/README.md truenas-dist/
-          docker save localhost/haven-truenas-sink:0.1.0 | gzip -1 > truenas-dist/haven-truenas-sink-amd64.tar.gz
+          docker save localhost/haven-truenas-sink:0.2.0 | gzip -1 > truenas-dist/haven-truenas-sink-amd64.tar.gz
           cd truenas-dist
           sha256sum haven-truenas-sink-amd64.tar.gz > SHA256SUMS
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

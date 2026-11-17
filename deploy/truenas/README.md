@@ -12,8 +12,8 @@ From the Haven repository, build the image for the NAS architecture. For a
 typical x86-64 NAS, use a Linux x86-64 Docker builder and run:
 
 ```sh
-docker build -f deploy/truenas/Dockerfile -t localhost/haven-truenas-sink:0.1.0 client
-docker save -o haven-truenas-sink.tar localhost/haven-truenas-sink:0.1.0
+docker build -f deploy/truenas/Dockerfile -t localhost/haven-truenas-sink:0.2.0 client
+docker save -o haven-truenas-sink.tar localhost/haven-truenas-sink:0.2.0
 ```
 
 Copy the image archive to TrueNAS and load it with `docker load -i` from
@@ -35,8 +35,20 @@ the repository.
 When the app log asks for browser approval, open the TrueNAS app shell and
 run `cat /state/approval-url`. Open that URL in your browser and approve the
 device with the same Gravitas account used on your Mac. The URL is temporary.
-Find the sink in **Devices** in Haven. Haven's existing eight-hour maximum
-session applies; approve a fresh sign-in when the app requests one.
+Choose the existing sink if you're upgrading and still using its original
+datasets. This keeps its device ID and transfer history. Choose **New sink**
+for a fresh install. After pairing, the app keeps its own transfer credential
+on the private state dataset. It reconnects after a restart and continues
+working when your browser session expires or you sign out of Gravitas.
+
+Use **Devices** in Haven to revoke the sink if the NAS or its credential is
+lost. Keep the state mount when upgrading. To pair again after revocation,
+stop the app and remove the saved `.session-*` files from its dedicated
+**state** dataset, then restart and approve the new request. The repository
+and media datasets are independent of the credential.
+
+Version 0.2.0 requires a Haven server with unattended sink pairing. Older
+servers report that they are waiting for support until the server is updated.
 
 On the Mac, configure a writable Haven repository and enable **Source** (or
 **Sink**). Use the Apple Photos import to send browseable files or **Back Up

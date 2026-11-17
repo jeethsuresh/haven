@@ -1,6 +1,6 @@
 services:
   haven-sink:
-    image: localhost/haven-truenas-sink:0.1.0
+    image: localhost/haven-truenas-sink:0.2.0
     pull_policy: never
     user: "568:568"
     read_only: true

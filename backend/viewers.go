@@ -204,7 +204,7 @@ func (s *Server) reports(w http.ResponseWriter, r *http.Request) {
 	out := []DeviceReport{}
 	for id, report := range s.store.state.Reports {
 		d := s.store.state.Devices[id]
-		if d.Account == a.Account && !d.Revoked && (d.has("source") || d.has("sink")) {
+		if d.Account == a.Account && (a.sinkKey == "" || d.ID == a.DeviceID) && !d.Revoked && (d.has("source") || d.has("sink")) {
 			out = append(out, report)
 		}
 	}
