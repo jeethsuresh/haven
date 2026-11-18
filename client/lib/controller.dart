@@ -1,14 +1,18 @@
 import 'native_broker.dart';
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:collection';
 import 'dart:math';
+
 import 'thumbnail_cache.dart';
 import 'thumbnail_storage.dart';
+
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:http/http.dart' as http;
+
 import 'api.dart';
 import 'local.dart';
 import 'model.dart';
@@ -366,11 +370,21 @@ class HavenController extends ChangeNotifier {
 
   Future<void> refresh() async {
     final raw = await api.request('GET', '/api/assets') as List;
-    assets = raw.map((j) => MediaAsset(j['asset'], j['sink_copies'])).toList()
-      ..sort(
-        (a, b) =>
-            (b.data['captured'] as int).compareTo(a.data['captured'] as int),
-      );
+    assets =
+        raw
+            .map(
+              (j) => MediaAsset(
+                j['asset'],
+                j['sink_copies'],
+                List<Json>.from(j['replicas'] as List? ?? const []),
+              ),
+            )
+            .toList()
+          ..sort(
+            (a, b) => (b.data['captured'] as int).compareTo(
+              a.data['captured'] as int,
+            ),
+          );
     devices = List<Json>.from(await api.request('GET', '/api/devices'));
     transfers = List<Json>.from(await api.request('GET', '/api/transfers'));
     deviceReports = List<Json>.from(await api.request('GET', '/api/reports'));
