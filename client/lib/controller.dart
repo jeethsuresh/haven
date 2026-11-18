@@ -1,14 +1,18 @@
 import 'native_broker.dart';
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:collection';
 import 'dart:math';
+
 import 'thumbnail_cache.dart';
 import 'thumbnail_storage.dart';
+
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:http/http.dart' as http;
+
 import 'api.dart';
 import 'local.dart';
 import 'model.dart';
@@ -194,13 +198,16 @@ class HavenController extends ChangeNotifier {
         if (generation != _authGeneration || _disposed) return;
         if (broker != null) {
           try {
-            final result = await api
-                .request('POST', '/api/auth/native/broker', {
-                  'code': broker['code'],
-                  'code_verifier': verifier,
-                  'sub': broker['sub'],
-                  'session_id': broker['session_id'],
-                });
+            final result = await api.request(
+              'POST',
+              '/api/auth/native/broker',
+              {
+                'code': broker['code'],
+                'code_verifier': verifier,
+                'sub': broker['sub'],
+                'session_id': broker['session_id'],
+              },
+            );
             if (generation != _authGeneration || _disposed) return;
             if (result['token'] is! String ||
                 (result['token'] as String).isEmpty) {
@@ -333,13 +340,11 @@ class HavenController extends ChangeNotifier {
     if (next.contains('sink') && local.root.isEmpty) {
       throw StateError('Choose a repository folder first.');
     }
-    final d =
-        await api.request('POST', '/api/devices', {
-              'name': name,
-              'platform': platform,
-              'roles': next,
-            })
-            as Json;
+    final d = await api.request('POST', '/api/devices', {
+      'name': name,
+      'platform': platform,
+      'roles': next,
+    }) as Json;
     deviceID = d['id'];
     roles = List<String>.from(d['roles']);
     peers.deviceID = deviceID;
@@ -366,11 +371,21 @@ class HavenController extends ChangeNotifier {
 
   Future<void> refresh() async {
     final raw = await api.request('GET', '/api/assets') as List;
-    assets = raw.map((j) => MediaAsset(j['asset'], j['sink_copies'])).toList()
-      ..sort(
-        (a, b) =>
-            (b.data['captured'] as int).compareTo(a.data['captured'] as int),
-      );
+    assets =
+        raw
+            .map(
+              (j) => MediaAsset(
+                j['asset'],
+                j['sink_copies'],
+                List<Json>.from(j['replicas'] as List? ?? const []),
+              ),
+            )
+            .toList()
+          ..sort(
+            (a, b) => (b.data['captured'] as int).compareTo(
+              a.data['captured'] as int,
+            ),
+          );
     devices = List<Json>.from(await api.request('GET', '/api/devices'));
     transfers = List<Json>.from(await api.request('GET', '/api/transfers'));
     deviceReports = List<Json>.from(await api.request('GET', '/api/reports'));
@@ -555,9 +570,8 @@ class HavenController extends ChangeNotifier {
     if (e.mime.startsWith('image/') ||
         e.mime.startsWith('video/') ||
         e.mime.startsWith('audio/')) {
-      final date = DateTime.fromMillisecondsSinceEpoch(
-        e.captured * 1000,
-      ).toUtc();
+      final date = DateTime.fromMillisecondsSinceEpoch(e.captured * 1000)
+          .toUtc();
       return 'Media/${date.year}/${date.month.toString().padLeft(2, '0')}/${_clean(e.name)}';
     }
     return 'Files/${_clean(e.name)}';

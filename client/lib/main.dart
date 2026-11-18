@@ -447,16 +447,6 @@ class _HavenHomeState extends State<HavenHome> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'YOUR PERSONAL CLOUD',
-                      style: TextStyle(
-                        color: muted,
-                        fontSize: 10,
-                        letterSpacing: 2,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
                     Text(
                       section == 'All media' ? 'Media library' : section,
                       style: const TextStyle(
@@ -465,17 +455,6 @@ class _HavenHomeState extends State<HavenHome> {
                         color: ink,
                         letterSpacing: -1,
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      media
-                          ? 'Every moment, connected across your devices.'
-                          : section == 'Devices'
-                          ? 'Choose where your library lives.'
-                          : section == 'Transfers'
-                          ? 'Direct device-to-device transfers. No TURN relay.'
-                          : 'One shared library, across all your sinks.',
-                      style: const TextStyle(color: muted, fontSize: 13),
                     ),
                   ],
                 ),
@@ -495,9 +474,7 @@ class _HavenHomeState extends State<HavenHome> {
                 ),
             ],
           ),
-          const SizedBox(height: 30),
-          if (media) _stats(wide),
-          if (media) const SizedBox(height: 30),
+          const SizedBox(height: 22),
           if (section == 'Devices')
             _devices()
           else if (section == 'Transfers')
@@ -585,63 +562,6 @@ class _HavenHomeState extends State<HavenHome> {
     );
   }
 
-  Widget _stats(bool wide) {
-    final media = c.assets.where((a) => a.kind == 'media').toList();
-    final safe = media.where((a) => a.copies > 0).length;
-    final sinks = c.devices
-        .where(
-          (d) => (d['roles'] as List).contains('sink') && d['revoked'] != true,
-        )
-        .length;
-    final values = [
-      ('Media items', '${media.length}', Icons.photo_library_outlined),
-      ('Stored on a sink', '$safe', Icons.verified_outlined),
-      ('Storage devices', '$sinks', Icons.dns_outlined),
-    ];
-    return LayoutBuilder(
-      builder: (context, box) => Wrap(
-        spacing: 14,
-        runSpacing: 14,
-        children: [
-          for (final v in values)
-            Container(
-              width: wide ? (box.maxWidth - 28) / 3 : box.maxWidth,
-              padding: const EdgeInsets.all(21),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                border: Border.all(color: const Color(0xFFE1E7DF)),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Row(
-                children: [
-                  Icon(v.$3, color: muted, size: 23),
-                  const SizedBox(width: 16),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        v.$1,
-                        style: const TextStyle(fontSize: 12, color: muted),
-                      ),
-                      const SizedBox(height: 7),
-                      Text(
-                        v.$2,
-                        style: const TextStyle(
-                          fontSize: 25,
-                          fontWeight: FontWeight.w600,
-                          color: ink,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
   Widget _empty(bool media) => Container(
     width: double.infinity,
     margin: const EdgeInsets.only(top: 12),
@@ -683,10 +603,10 @@ class _HavenHomeState extends State<HavenHome> {
           query.isNotEmpty
               ? 'Try a different filename.'
               : media
-              ? 'Enable your phone as a source and a desktop as a sink.\nThumbnails will appear here after a scan.'
+              ? 'Connect a device to add media to your library.'
               : section == 'Contacts' || section == 'Notes'
-              ? 'The structured namespace is ready. Native contacts and notes\nadapters are scaffolded for a later release.'
-              : 'Add files to the Files folder on a desktop sink.',
+              ? 'Importing this content is not available yet.'
+              : 'Add files to the Files folder on a storage device.',
           textAlign: TextAlign.center,
           style: const TextStyle(color: muted, height: 1.7),
         ),
@@ -716,50 +636,12 @@ class _HavenHomeState extends State<HavenHome> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                Thumbnail(controller: c, asset: asset),
-                if (asset.mime.startsWith('video/'))
-                  const Center(
-                    child: Icon(
-                      Icons.play_circle_outline,
-                      size: 44,
-                      color: Colors.white,
-                    ),
-                  ),
-                Positioned(
-                  right: 10,
-                  top: 10,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 9,
-                      vertical: 5,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: .94),
-                      borderRadius: BorderRadius.circular(30),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          asset.copies > 0
-                              ? Icons.check_circle
-                              : Icons.schedule,
-                          size: 12,
-                          color: asset.copies > 0 ? ink : muted,
-                        ),
-                        const SizedBox(width: 5),
-                        Text(
-                          asset.copies > 0 ? 'Stored' : 'Pending',
-                          style: const TextStyle(fontSize: 10),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
+            child: HeroMode(
+              enabled: !MediaQuery.disableAnimationsOf(context),
+              child: Hero(
+                tag: ('haven-preview', c.account, asset.id),
+                child: Thumbnail(controller: c, asset: asset),
+              ),
             ),
           ),
           Padding(
@@ -779,7 +661,7 @@ class _HavenHomeState extends State<HavenHome> {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  '${readableBytes(asset.size)} · ${asset.copies} sink ${asset.copies == 1 ? 'copy' : 'copies'}',
+                  _copyLabel(asset),
                   style: const TextStyle(fontSize: 10, color: muted),
                 ),
               ],
@@ -998,10 +880,7 @@ class _HavenHomeState extends State<HavenHome> {
         if (jobs.isEmpty)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 40),
-            child: Text(
-              'No transfers yet. Connect a source and a sink.',
-              style: TextStyle(color: muted),
-            ),
+            child: Text('No transfers yet.', style: TextStyle(color: muted)),
           ),
         for (final job in jobs)
           Padding(
@@ -1037,48 +916,154 @@ class _HavenHomeState extends State<HavenHome> {
 
   String _deviceName(String id) =>
       c.devices.where((d) => d['id'] == id).firstOrNull?['name'] ?? 'Device';
-  void _details(MediaAsset a) => showModalBottomSheet(
-    routeSettings: RouteSettings(
-      arguments: HistoryDestination(() {
-        if (c.assets.any((item) => item.id == a.id)) _details(a);
-      }),
-    ),
-    context: context,
-    showDragHandle: true,
-    isScrollControlled: true,
-    builder: (context) => SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(28, 10, 28, 38),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            a.name,
-            style: const TextStyle(fontSize: 23, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 20),
-          Text('${a.copies} verified sink copies · ${readableBytes(a.size)}'),
-          const SizedBox(height: 12),
-          SelectableText(a.path),
-          const SizedBox(height: 18),
-          const Text('SHA-256', style: TextStyle(fontSize: 11, color: muted)),
-          SelectableText(a.hash, style: const TextStyle(fontSize: 12)),
-          const SizedBox(height: 18),
-          Text(
-            '${(a.data['revisions'] as List).length} revisions retained in the catalog',
-          ),
-          if (a.data['conflict_of'] != null)
-            const Padding(
-              padding: EdgeInsets.only(top: 15),
-              child: Text(
-                'Conflict copy preserved from a concurrent edit.',
-                style: TextStyle(color: Colors.orange),
+  String _copyLabel(MediaAsset asset) => switch (asset.copies) {
+    0 => 'No verified copies',
+    1 => '1 verified copy',
+    final count => '$count verified copies',
+  };
+
+  void _details(MediaAsset asset) {
+    final account = c.account;
+    Navigator.of(context).push(
+      HistoryPageRoute<void>(
+        builder: (context) => ListenableBuilder(
+          listenable: c,
+          builder: (context, _) {
+            final current = c.ready && c.account == account
+                ? c.assets.where((a) => a.id == asset.id).firstOrNull
+                : null;
+            if (current == null) {
+              return Scaffold(
+                appBar: AppBar(title: const Text('Library')),
+                body: const Center(
+                  child: Text('This item is no longer available.'),
+                ),
+              );
+            }
+            final replicaIds = current.replicas
+                .where((replica) => replica['revision_id'] == current.revision)
+                .map((replica) => replica['device_id'])
+                .toSet();
+            final storage = c.devices.where(
+              (device) =>
+                  replicaIds.contains(device['id']) &&
+                  device['revoked'] != true &&
+                  (device['roles'] as List).contains('sink'),
+            );
+            final media = current.kind == 'media';
+            return Scaffold(
+              backgroundColor: media ? const Color(0xff182621) : canvas,
+              appBar: AppBar(
+                title: Text(current.name),
+                foregroundColor: media ? Colors.white : ink,
+                backgroundColor: media ? const Color(0xff182621) : canvas,
               ),
-            ),
-        ],
+              body: ListView(
+                children: [
+                  if (media)
+                    SizedBox(
+                      height: (MediaQuery.sizeOf(context).height * .58)
+                          .clamp(180, 660)
+                          .toDouble(),
+                      child: HeroMode(
+                        enabled: !MediaQuery.disableAnimationsOf(context),
+                        child: Hero(
+                          tag: ('haven-preview', account, current.id),
+                          child: Thumbnail(
+                            controller: c,
+                            asset: current,
+                            fit: BoxFit.contain,
+                            background: const Color(0xff182621),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ColoredBox(
+                    color: canvas,
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 720),
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(22, 20, 22, 32),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              ListTile(
+                                contentPadding: EdgeInsets.zero,
+                                leading: Icon(
+                                  current.copies > 0
+                                      ? Icons.verified_outlined
+                                      : Icons.shield_outlined,
+                                  color: ink,
+                                ),
+                                title: Text(
+                                  _copyLabel(current),
+                                  style: const TextStyle(
+                                    color: ink,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                              for (final device in storage)
+                                Padding(
+                                  padding: const EdgeInsets.only(
+                                    left: 40,
+                                    bottom: 8,
+                                  ),
+                                  child: Text(
+                                    device['name'] as String? ??
+                                        'Storage device',
+                                  ),
+                                ),
+                              if (current.data['conflict_of'] != null)
+                                const Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 10),
+                                  child: Text(
+                                    'Conflict copy preserved from a concurrent edit.',
+                                  ),
+                                ),
+                              const Divider(),
+                              ExpansionTile(
+                                tilePadding: EdgeInsets.zero,
+                                childrenPadding: const EdgeInsets.only(
+                                  bottom: 12,
+                                ),
+                                expandedCrossAxisAlignment:
+                                    CrossAxisAlignment.start,
+                                expandedAlignment: Alignment.centerLeft,
+                                title: const Text('File information'),
+                                children: [
+                                  SelectableText(current.path),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    '${readableBytes(current.size)} · ${(current.data['revisions'] as List).length} retained revisions',
+                                  ),
+                                  const SizedBox(height: 12),
+                                  const Text(
+                                    'SHA-256',
+                                    style: TextStyle(
+                                      color: muted,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                  SelectableText(current.hash),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
       ),
-    ),
-  );
+    );
+  }
+
   Future<void> _settings() async {
     var source = c.roles.contains('source'), sink = c.roles.contains('sink');
     final name = TextEditingController(text: c.name);
@@ -1101,7 +1086,7 @@ class _HavenHomeState extends State<HavenHome> {
                   const SizedBox(height: 20),
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
-                    title: const Text('Source'),
+                    title: const Text('Share files from this device'),
                     subtitle: Text(
                       c.isAndroid
                           ? 'Discover photos, videos, and audio in your gallery.'
@@ -1117,7 +1102,7 @@ class _HavenHomeState extends State<HavenHome> {
                       title: const Text('Repository folder'),
                       subtitle: Text(
                         c.local.root.isEmpty
-                            ? 'Choose a folder before enabling sink mode'
+                            ? 'Choose a folder to store copies'
                             : c.local.root,
                       ),
                       trailing: IconButton(
@@ -1150,7 +1135,7 @@ class _HavenHomeState extends State<HavenHome> {
                     ),
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
-                      title: const Text('Sink'),
+                      title: const Text('Keep verified copies on this device'),
                       subtitle: const Text(
                         'Store originals and replicate local file edits.',
                       ),
@@ -1160,7 +1145,7 @@ class _HavenHomeState extends State<HavenHome> {
                   ],
                   const SizedBox(height: 14),
                   const Text(
-                    'Every device is also a viewer. This scaffold scans and transfers while the app is open.',
+                    'Transfers run while Haven is open.',
                     style: TextStyle(fontSize: 12, color: muted),
                   ),
                 ],
@@ -1200,7 +1185,15 @@ class _HavenHomeState extends State<HavenHome> {
 class Thumbnail extends StatefulWidget {
   final HavenController controller;
   final MediaAsset asset;
-  const Thumbnail({super.key, required this.controller, required this.asset});
+  final BoxFit fit;
+  final Color background;
+  const Thumbnail({
+    super.key,
+    required this.controller,
+    required this.asset,
+    this.fit = BoxFit.cover,
+    this.background = const Color(0xFFE4EBE2),
+  });
   @override
   State<Thumbnail> createState() => _ThumbnailState();
 }
@@ -1229,9 +1222,9 @@ class _ThumbnailState extends State<Thumbnail> {
   Widget build(BuildContext context) => FutureBuilder(
     future: future,
     builder: (context, snapshot) => snapshot.hasData
-        ? Image.memory(snapshot.data, fit: BoxFit.cover)
+        ? Image.memory(snapshot.data, fit: widget.fit)
         : Container(
-            color: const Color(0xFFE4EBE2),
+            color: widget.background,
             child: Icon(
               widget.asset.mime.startsWith('video/')
                   ? Icons.videocam_outlined

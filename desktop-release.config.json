@@ -2,15 +2,16 @@
   "name": "Haven",
   "directory": "client",
   "engine": "flutter",
-  "version": "0.1.7",
-  "versionCode": 1007,
+  "version": "0.1.8",
+  "versionCode": 1008,
   "flutterVersion": "3.47.7",
   "flutterRevision": "abaf9c523780a608bd46686fd5e53740a07077f8",
   "defines": [
     "HAVEN_BACKEND=https://haven.gravitas.cool"
   ],
   "changes": [
-    "Haven shows its own app icon on macOS, Windows, and Linux."
+    "Open a library preview in a photo-first viewer with a clear count of verified copies and their devices.",
+    "File paths, hashes and revision information are available under File information."
   ],
   "schemaVersion": 1,
   "slug": "haven",

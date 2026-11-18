@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "versionCode": 1,
   "changes": [
-    "Haven now shows its own app icon in the Android launcher."
+    "Open a library preview in a photo-first viewer with a clear count of verified copies and their devices.",
+    "File paths, hashes and revision information are available under File information."
   ]
 }

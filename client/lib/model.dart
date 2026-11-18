@@ -5,7 +5,8 @@ typedef Json = Map<String, dynamic>;
 class MediaAsset {
   final Json data;
   final int copies;
-  MediaAsset(this.data, [this.copies = 0]);
+  final List<Json> replicas;
+  MediaAsset(this.data, [this.copies = 0, this.replicas = const []]);
   String get id => data['id'] as String;
   String get kind => data['kind'] as String;
   String get path => data['path'] as String;
