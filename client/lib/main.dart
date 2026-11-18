@@ -978,7 +978,7 @@ class _HavenHomeState extends State<HavenHome> {
                         ),
                       ),
                     ),
-                  ColoredBox(
+                  Material(
                     color: canvas,
                     child: Center(
                       child: ConstrainedBox(
