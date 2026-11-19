@@ -76,18 +76,20 @@ type Session struct {
 	Envelope string // Authenticated encryption; the IAM status proof is never plaintext on disk.
 	DeviceID string
 	Expires  int64
+	sinkKey  string
 }
 type State struct {
-	Devices   map[string]Device
-	Assets    map[string]Asset
-	Replicas  []Replica
-	Transfers map[string]Transfer
-	Sessions  map[string]Session
-	Reports   map[string]DeviceReport
+	Devices         map[string]Device
+	Assets          map[string]Asset
+	Replicas        []Replica
+	Transfers       map[string]Transfer
+	Sessions        map[string]Session
+	Reports         map[string]DeviceReport
+	SinkCredentials map[string]string // Token hash to the paired device ID.
 }
 
 func emptyState() State {
-	return State{Devices: map[string]Device{}, Assets: map[string]Asset{}, Replicas: []Replica{}, Transfers: map[string]Transfer{}, Sessions: map[string]Session{}, Reports: map[string]DeviceReport{}}
+	return State{Devices: map[string]Device{}, Assets: map[string]Asset{}, Replicas: []Replica{}, Transfers: map[string]Transfer{}, Sessions: map[string]Session{}, Reports: map[string]DeviceReport{}, SinkCredentials: map[string]string{}}
 }
 
 // Account is hidden from API JSON but must survive snapshots. Use a separate
@@ -125,6 +127,9 @@ func openStore(dir string) (*Store, error) {
 	}
 	if d.State.Reports == nil {
 		d.State.Reports = map[string]DeviceReport{}
+	}
+	if d.State.SinkCredentials == nil {
+		d.State.SinkCredentials = map[string]string{}
 	}
 	s.state = d.State
 	for id, owner := range d.DeviceOwners {

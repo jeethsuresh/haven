@@ -1,0 +1,62 @@
+name: Haven TrueNAS image
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/truenas.yml'
+      - 'client/lib/**'
+      - 'client/linux/**'
+      - 'client/integration_test/truenas_smoke_source.dart'
+      - 'backend/**'
+      - 'client/pubspec.*'
+      - 'client/.dockerignore'
+      - 'client/truenas-entrypoint.sh'
+      - 'client/truenas-pulse.pa'
+      - 'deploy/truenas/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  image:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Build the x86-64 sink
+        run: docker build -f deploy/truenas/Dockerfile -t localhost/haven-truenas-sink:0.2.0 client
+      - name: Check the runtime executable and permissions
+        run: |
+          test "$(docker image inspect localhost/haven-truenas-sink:0.2.0 --format '{{.Config.User}}')" = 568:568
+          docker run --rm --entrypoint /bin/sh localhost/haven-truenas-sink:0.2.0 -ec '
+            test -x /app/haven
+            test -f /app/lib/libapp.so
+            test -x /usr/bin/Xvfb
+            ldd /app/haven /app/lib/libflutter_webrtc_plugin.so > /tmp/runtime-libs
+            if grep -q "not found" /tmp/runtime-libs; then cat /tmp/runtime-libs; exit 1; fi
+          '
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.2'
+          cache: false
+      - name: Build the native test source
+        run: |
+          docker build -f deploy/truenas/Dockerfile -t haven-truenas-smoke-source \
+            --build-arg HAVEN_LINUX_TARGET=integration_test/truenas_smoke_source.dart client
+      - name: Pair once, restart the receiver and verify an archive transfer
+        run: bash deploy/truenas/smoke/test.sh localhost/haven-truenas-sink:0.2.0 haven-truenas-smoke-source
+      - name: Save the installable image and configuration
+        run: |
+          set -o pipefail
+          mkdir -p truenas-dist
+          cp deploy/truenas/compose.yaml deploy/truenas/README.md truenas-dist/
+          docker save localhost/haven-truenas-sink:0.2.0 | gzip -1 > truenas-dist/haven-truenas-sink-amd64.tar.gz
+          cd truenas-dist
+          sha256sum haven-truenas-sink-amd64.tar.gz > SHA256SUMS
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: haven-truenas-amd64
+          path: truenas-dist/
+          if-no-files-found: error
+          retention-days: 7

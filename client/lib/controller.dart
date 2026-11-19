@@ -47,6 +47,7 @@ class HavenController extends ChangeNotifier {
       _disposed = false;
   Timer? _timer, _reportTimer;
   bool _reporting = false;
+  bool _unattendedSink = false;
   DateTime _lastScan = DateTime(2000);
   HavenController({
     HavenApi? api,
@@ -120,8 +121,12 @@ class HavenController extends ChangeNotifier {
     if (!ready && resumeLogin && !_disposed) await signIn();
   }
 
-  Future<void> connect() async {
+  Future<void> connect({bool requireUnattendedSink = false}) async {
     final me = await api.request('GET', '/api/me') as Json;
+    _unattendedSink = me['unattended_sink'] == true;
+    if (requireUnattendedSink && !_unattendedSink) {
+      throw StateError('Haven did not return an unattended sink credential.');
+    }
     account = me['account'];
     deviceID = me['device_id'];
     final scope = sha256
@@ -140,8 +145,8 @@ class HavenController extends ChangeNotifier {
           : 'Desktop';
       await configure(['viewer']);
     }
-    ready = true;
     await refresh();
+    ready = true;
     peers.deviceID = deviceID;
     peers.stun = List<String>.from(config['stun_urls'] ?? []);
     _timer?.cancel();
@@ -403,7 +408,8 @@ class HavenController extends ChangeNotifier {
     if (_ticking || _scanning || !ready || _disposed) return;
     _ticking = true;
     try {
-      if (!kIsWeb &&
+      if (!_unattendedSink &&
+          !kIsWeb &&
           DateTime.now().difference(_lastScan) > const Duration(seconds: 60)) {
         _lastScan = DateTime.now();
         await _discover(() async {

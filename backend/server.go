@@ -58,7 +58,8 @@ func decode(w http.ResponseWriter, r *http.Request, out any) bool {
 }
 func (s *Server) actor(st *State, session Session) (Device, error) {
 	d, ok := st.Devices[session.DeviceID]
-	if !ok || d.Revoked || d.Account != session.Account {
+	if !ok || d.Revoked || d.Account != session.Account ||
+		(session.sinkKey != "" && st.SinkCredentials[session.sinkKey] != d.ID) {
 		return Device{}, errors.New("device_required")
 	}
 	return d, nil
@@ -70,12 +71,12 @@ func (s *Server) handler() http.Handler {
 		reply(w, 200, map[string]string{"status": "ok", "app": "haven", "version": "0.1.0"})
 	})
 	m.HandleFunc("GET /api/config", func(w http.ResponseWriter, r *http.Request) {
-		reply(w, 200, map[string]any{"dev": s.dev, "stun_urls": s.stunURLs, "turn": false, "chunk_size": 16384, "namespaces": []string{"media", "file", "contact", "note"}})
+		reply(w, 200, map[string]any{"dev": s.dev, "stun_urls": s.stunURLs, "turn": false, "chunk_size": 16384, "unattended_sinks": true, "namespaces": []string{"media", "file", "contact", "note"}})
 	})
 	m.HandleFunc("GET /api/me", func(w http.ResponseWriter, r *http.Request) {
 		a, _, ok := s.authorize(w, r)
 		if ok {
-			reply(w, 200, map[string]any{"account": a.Account, "device_id": a.DeviceID, "expires": a.Expires})
+			reply(w, 200, map[string]any{"account": a.Account, "device_id": a.DeviceID, "expires": a.Expires, "unattended_sink": a.sinkKey != ""})
 		}
 	})
 	m.HandleFunc("GET /api/devices", func(w http.ResponseWriter, r *http.Request) {
@@ -87,7 +88,7 @@ func (s *Server) handler() http.Handler {
 		defer s.store.mu.Unlock()
 		out := []Device{}
 		for _, d := range s.store.state.Devices {
-			if d.Account == a.Account {
+			if d.Account == a.Account && (a.sinkKey == "" || d.ID == a.DeviceID) {
 				out = append(out, d)
 			}
 		}
@@ -131,6 +132,7 @@ func (s *Server) handler() http.Handler {
 			}
 			d.Revoked = true
 			st.Devices[d.ID] = d
+			delete(st.SinkCredentials, currentSinkKey(st, d.ID))
 			for k, t := range st.Transfers {
 				if t.From == d.ID || t.To == d.ID {
 					t.Status = "superseded"
@@ -210,7 +212,11 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 	}
 	var device Device
 	err := s.store.update(func(st *State) error {
-		id := a.DeviceID
+		current, exists := st.Sessions[key]
+		if !exists {
+			return errors.New("session_ended")
+		}
+		id := current.DeviceID
 		if id == "" {
 			id = randomID()
 		}
@@ -248,8 +254,35 @@ func (s *Server) assets(w http.ResponseWriter, r *http.Request) {
 	s.store.mu.Lock()
 	defer s.store.mu.Unlock()
 	out := []map[string]any{}
+	assigned := map[string]map[string]bool{}
+	if a.sinkKey != "" {
+		for _, t := range s.store.state.Transfers {
+			if t.Account == a.Account && (t.From == a.DeviceID || t.To == a.DeviceID) && t.Status != "superseded" && t.Status != "complete" && t.Status != "unavailable" {
+				if assigned[t.AssetID] == nil {
+					assigned[t.AssetID] = map[string]bool{}
+				}
+				assigned[t.AssetID][t.RevisionID] = true
+			}
+		}
+	}
 	for _, asset := range s.store.state.Assets {
 		if asset.Account != a.Account {
+			continue
+		}
+		if a.sinkKey != "" {
+			if len(assigned[asset.ID]) == 0 {
+				continue
+			}
+			revisions := []Revision{}
+			for _, revision := range asset.Revisions {
+				if assigned[asset.ID][revision.ID] {
+					revisions = append(revisions, revision)
+				}
+			}
+			if len(revisions) != 0 {
+				asset.Revisions = revisions
+				out = append(out, map[string]any{"asset": asset, "replicas": []Replica{}, "sink_copies": 0})
+			}
 			continue
 		}
 		replicas := []Replica{}
@@ -363,7 +396,7 @@ func (s *Server) transfers(w http.ResponseWriter, r *http.Request) {
 	defer s.store.mu.Unlock()
 	out := []Transfer{}
 	for _, t := range s.store.state.Transfers {
-		if t.Account == a.Account {
+		if t.Account == a.Account && (a.sinkKey == "" || t.From == a.DeviceID || t.To == a.DeviceID) {
 			out = append(out, t)
 		}
 	}

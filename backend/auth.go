@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"github.com/jeethsuresh/haven/backend/internal/storecatalog"
 	"html"
 	"net/http"
 	"net/http/httptest"
@@ -15,11 +14,12 @@ import (
 	"time"
 
 	"github.com/jeethsuresh/haven/backend/internal/gravitas"
+	"github.com/jeethsuresh/haven/backend/internal/storecatalog"
 )
 
 type pendingLogin struct {
 	Challenge, Envelope, Account, Approval string
-	Token                                  string
+	Token, SinkName, SinkDevice, SinkKey   string
 	Platform                               string
 	Expires                                int64
 }
@@ -45,6 +45,9 @@ func (s *Server) rawToken(r *http.Request) string {
 func (s *Server) authorize(w http.ResponseWriter, r *http.Request) (Session, string, bool) {
 	token := s.rawToken(r)
 	key := tokenHash(token)
+	if strings.HasPrefix(token, sinkTokenPrefix) {
+		return s.authorizeSink(w, r, key)
+	}
 	s.store.mu.Lock()
 	session, ok := s.store.state.Sessions[key]
 	device := s.store.state.Devices[session.DeviceID]
@@ -241,8 +244,9 @@ func (s *Server) authRoutes(m *http.ServeMux) {
 			return
 		}
 		var body struct {
-			Challenge string `json:"challenge"`
-			Platform  string `json:"platform"`
+			Challenge string  `json:"challenge"`
+			Platform  string  `json:"platform"`
+			SinkName  *string `json:"sink_name"`
 		}
 		if !decode(w, r, &body) {
 			return
@@ -252,6 +256,14 @@ func (s *Server) authRoutes(m *http.ServeMux) {
 			fail(w, 400, "invalid_challenge")
 			return
 		}
+		p := pendingLogin{Challenge: body.Challenge, Platform: body.Platform, Expires: time.Now().Add(10 * time.Minute).Unix()}
+		if body.SinkName != nil {
+			p.SinkName = strings.TrimSpace(*body.SinkName)
+			if body.Platform != "linux" || !validSinkName(p.SinkName) {
+				fail(w, 400, "invalid_sink")
+				return
+			}
+		}
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		s.prunePending()
@@ -260,7 +272,7 @@ func (s *Server) authRoutes(m *http.ServeMux) {
 			return
 		}
 		id := randomID()
-		s.pending[id] = pendingLogin{Challenge: body.Challenge, Platform: body.Platform, Expires: time.Now().Add(10 * time.Minute).Unix()}
+		s.pending[id] = p
 		next := "/native/complete?id=" + id
 		reply(w, 200, map[string]string{"id": id, "approval_url": s.appURL + "/auth/gravitas/start?next=" + url.QueryEscape(next)})
 	})
@@ -279,7 +291,7 @@ func (s *Server) authRoutes(m *http.ServeMux) {
 				fail(w, 403, "invalid_approval")
 				return
 			}
-			nativeConnected(w, p.Platform)
+			nativeConnected(w, p)
 			return
 		}
 		if exists {
@@ -295,6 +307,10 @@ func (s *Server) authRoutes(m *http.ServeMux) {
 		s.mu.Unlock()
 		if !exists {
 			fail(w, 410, "login_expired")
+			return
+		}
+		if p.SinkName != "" {
+			s.sinkApprovalPage(w, id, p)
 			return
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -325,9 +341,22 @@ func (s *Server) authRoutes(m *http.ServeMux) {
 			fail(w, 403, "invalid_approval")
 			return
 		}
+		if p.SinkName != "" {
+			p.SinkDevice = r.PostForm.Get("sink_device")
+			if p.SinkDevice != "" {
+				s.store.mu.Lock()
+				device := s.store.state.Devices[p.SinkDevice]
+				p.SinkKey = currentSinkKey(&s.store.state, p.SinkDevice)
+				s.store.mu.Unlock()
+				if !canPairSink(device, session.Account) {
+					fail(w, 409, "sink_unavailable")
+					return
+				}
+			}
+		}
 		p.Approval = "approved"
 		s.pending[id] = p
-		nativeConnected(w, p.Platform)
+		nativeConnected(w, p)
 	})
 	m.HandleFunc("POST /api/auth/native/poll", func(w http.ResponseWriter, r *http.Request) {
 		if !s.validMutation(r) {
@@ -362,7 +391,18 @@ func (s *Server) authRoutes(m *http.ServeMux) {
 			reply(w, 200, map[string]string{"token": p.Token})
 			return
 		}
-		token, err := s.issueSession(p.Account, p.Envelope, time.Now().Add(gravitas.SessionLifetime).Unix())
+		var token string
+		var err error
+		if p.SinkName != "" {
+			token, err = s.issueSink(p)
+		} else {
+			token, err = s.issueSession(p.Account, p.Envelope, time.Now().Add(gravitas.SessionLifetime).Unix())
+		}
+		if errors.Is(err, errSinkUnavailable) {
+			delete(s.pending, body.ID)
+			fail(w, 409, "sink_unavailable")
+			return
+		}
 		if err != nil {
 			fail(w, 500, "storage_failed")
 			return
@@ -382,10 +422,15 @@ func (s *Server) prunePending() {
 
 // The Android intent only resumes Haven. The token is redeemed separately over
 // HTTPS by the initiating app's PKCE verifier; no credentials enter this link.
-func nativeConnected(w http.ResponseWriter, platform string) {
+func nativeConnected(w http.ResponseWriter, p pendingLogin) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	fmt.Fprint(w, `<!doctype html><meta name="viewport" content="width=device-width"><title>Haven connected</title><main style="font:18px system-ui;max-width:36rem;margin:10vh auto;padding:2rem"><h1>You're connected</h1><p>Switch back to Haven to finish signing in.</p>`)
-	if platform == "android" {
+	fmt.Fprint(w, `<!doctype html><meta name="viewport" content="width=device-width"><title>Haven connected</title><main style="font:18px system-ui;max-width:36rem;margin:10vh auto;padding:2rem"><h1>You're connected</h1>`)
+	if p.SinkName != "" {
+		fmt.Fprint(w, `<p>The TrueNAS sink will finish pairing automatically. You can close this page.</p>`)
+	} else {
+		fmt.Fprint(w, `<p>Switch back to Haven to finish signing in.</p>`)
+	}
+	if p.Platform == "android" {
 		fmt.Fprint(w, `<p><a style="display:inline-block;background:#193d34;color:white;padding:1rem;text-decoration:none;border-radius:.6rem" href="intent://auth/complete#Intent;scheme=haven;package=cool.gravitas.haven;end">Return to Haven</a></p>`)
 	}
 	fmt.Fprint(w, `</main>`)

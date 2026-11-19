@@ -1,0 +1,27 @@
+services:
+  haven-sink:
+    image: localhost/haven-truenas-sink:0.2.0
+    pull_policy: never
+    user: "568:568"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    network_mode: host
+    restart: unless-stopped
+    init: true
+    tmpfs:
+      - /tmp:mode=1777
+    environment:
+      HAVEN_DEVICE_NAME: TrueNAS Sink
+      HAVEN_BACKEND_URL: https://haven.gravitas.cool
+    volumes:
+      - type: bind
+        source: /mnt/POOL/haven-state
+        target: /state
+        bind:
+          create_host_path: false
+      - type: bind
+        source: /mnt/POOL/haven-repository
+        target: /repository
+        bind:
+          create_host_path: false
