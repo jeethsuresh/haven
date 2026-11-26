@@ -13,7 +13,7 @@ concurrency:
   queue: max
 jobs:
   backend:
-    runs-on: ubuntu-24.04
+    runs-on: gravitas-linux
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -29,7 +29,7 @@ jobs:
           python3 scripts/test-ci-version.py
           python3 scripts/android-release.py validate
   client:
-    runs-on: ubuntu-24.04
+    runs-on: gravitas-linux
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -43,7 +43,7 @@ jobs:
           flutter test --no-pub
           flutter build web --release --no-pub --no-web-resources-cdn
   android:
-    runs-on: ubuntu-24.04
+    runs-on: gravitas-linux
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -83,7 +83,7 @@ jobs:
         run: python3 scripts/test-release-compile.py
   image:
     needs: [backend, client, android]
-    runs-on: ubuntu-24.04
+    runs-on: gravitas-linux
     timeout-minutes: 35
     permissions:
       contents: read
@@ -113,7 +113,7 @@ jobs:
   deploy:
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     needs: [image, desktop-verify]
-    runs-on: ubuntu-24.04
+    runs-on: gravitas-linux
     timeout-minutes: 15
     environment:
       name: gravitas
@@ -139,7 +139,7 @@ jobs:
   android-release:
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     needs: [backend, client, android, deploy]
-    runs-on: ubuntu-24.04
+    runs-on: gravitas-linux
     timeout-minutes: 40
     permissions:
       contents: write
@@ -208,7 +208,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - {os: ubuntu-22.04, platform: linux, arch: x64}
+          - {os: gravitas-linux-22, platform: linux, arch: x64}
           - {os: windows-2022, platform: windows, arch: x64}
           - {os: macos-15, platform: macos, arch: arm64}
           - {os: macos-15, platform: macos, arch: x64}
@@ -252,7 +252,7 @@ jobs:
 
   desktop-verify:
     needs: desktop
-    runs-on: ubuntu-24.04
+    runs-on: gravitas-linux
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -272,7 +272,7 @@ jobs:
   desktop-plan:
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     needs: [deploy, desktop-verify]
-    runs-on: ubuntu-24.04
+    runs-on: gravitas-linux
     outputs:
       publish: ${{ steps.release.outputs.publish }}
     steps:
@@ -322,7 +322,7 @@ jobs:
   desktop-publish:
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     needs: [deploy, desktop-verify, desktop-sign]
-    runs-on: ubuntu-24.04
+    runs-on: gravitas-linux
     permissions:
       contents: write
     steps:
