@@ -13,7 +13,7 @@ concurrency:
   queue: max
 jobs:
   backend:
-    runs-on: ubuntu-24.04
+    runs-on: gravitas-linux
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -29,7 +29,7 @@ jobs:
           python3 scripts/test-ci-version.py
           python3 scripts/android-release.py validate
   client:
-    runs-on: ubuntu-24.04
+    runs-on: gravitas-linux
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -43,8 +43,8 @@ jobs:
           flutter test --no-pub
           flutter build web --release --no-pub --no-web-resources-cdn
   android:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 40
+    runs-on: gravitas-linux
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
@@ -69,21 +69,25 @@ jobs:
         run: ./gradlew --no-daemon :app:testDebugUnitTest
       - name: Enable KVM for native sign-in smoke test
         run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
+          if [ ! -r /dev/kvm ] || [ ! -w /dev/kvm ]; then
+            echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+            sudo udevadm control --reload-rules
+            sudo udevadm trigger --name-match=kvm
+          fi
+          test -r /dev/kvm && test -w /dev/kvm
       - name: Exercise native broker channel and encrypted browser recovery
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
         with:
           api-level: 35
           arch: x86_64
+          emulator-options: -no-window -gpu host -no-snapshot -noaudio -no-boot-anim
           disable-animations: true
           script: cd client && flutter test integration_test/android_login_smoke.dart --no-pub -d emulator-5554
       - name: Compile the exact release command with a disposable CI certificate
         run: python3 scripts/test-release-compile.py
   image:
     needs: [backend, client, android]
-    runs-on: ubuntu-24.04
+    runs-on: gravitas-linux
     timeout-minutes: 35
     permissions:
       contents: read
@@ -113,7 +117,7 @@ jobs:
   deploy:
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     needs: [image, desktop-verify]
-    runs-on: ubuntu-24.04
+    runs-on: gravitas-linux
     timeout-minutes: 15
     environment:
       name: gravitas
@@ -139,7 +143,7 @@ jobs:
   android-release:
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     needs: [backend, client, android, deploy]
-    runs-on: ubuntu-24.04
+    runs-on: gravitas-linux
     timeout-minutes: 40
     permissions:
       contents: write
@@ -208,7 +212,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - {os: ubuntu-22.04, platform: linux, arch: x64}
+          - {os: gravitas-linux-22, platform: linux, arch: x64}
           - {os: windows-2022, platform: windows, arch: x64}
           - {os: macos-15, platform: macos, arch: arm64}
           - {os: macos-15, platform: macos, arch: x64}
@@ -252,7 +256,7 @@ jobs:
 
   desktop-verify:
     needs: desktop
-    runs-on: ubuntu-24.04
+    runs-on: gravitas-linux
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -272,7 +276,7 @@ jobs:
   desktop-plan:
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     needs: [deploy, desktop-verify]
-    runs-on: ubuntu-24.04
+    runs-on: gravitas-linux
     outputs:
       publish: ${{ steps.release.outputs.publish }}
     steps:
@@ -322,7 +326,7 @@ jobs:
   desktop-publish:
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     needs: [deploy, desktop-verify, desktop-sign]
-    runs-on: ubuntu-24.04
+    runs-on: gravitas-linux
     permissions:
       contents: write
     steps:

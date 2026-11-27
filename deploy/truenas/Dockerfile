@@ -4,7 +4,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgtk-3-dev libsecret-1-dev libjsoncpp-dev liblzma-dev libssl-dev libpulse-dev \
     libasound2-dev libx11-dev libxext-dev libxfixes-dev libxdamage-dev libxrandr-dev libgbm-dev \
     && rm -rf /var/lib/apt/lists/*
-ENV PATH=/opt/flutter/bin:$PATH CI=true FLUTTER_SUPPRESS_ANALYTICS=true CMAKE_BUILD_PARALLEL_LEVEL=2
+ENV PATH=/opt/flutter/bin:$PATH CI=true FLUTTER_SUPPRESS_ANALYTICS=true CMAKE_BUILD_PARALLEL_LEVEL=2 TAR_OPTIONS=--no-same-owner
 RUN git init /opt/flutter && git -C /opt/flutter remote add origin https://github.com/flutter/flutter.git \
     && git -C /opt/flutter fetch --depth 1 origin refs/tags/3.47.7:refs/tags/3.47.7 \
     && git -C /opt/flutter checkout --detach 3.47.7 \

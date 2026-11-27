@@ -14,7 +14,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - {os: ubuntu-latest, target: linux, bundle: client/build/linux/x64/release/bundle}
+          - {os: gravitas-linux, target: linux, bundle: client/build/linux/x64/release/bundle}
           - {os: windows-latest, target: windows, bundle: client/build/windows/x64/runner/Release}
           - {os: macos-latest, target: macos, bundle: client/build/macos/Build/Products/Release}
     runs-on: ${{ matrix.os }}
