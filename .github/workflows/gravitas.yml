@@ -80,6 +80,7 @@ jobs:
         with:
           api-level: 35
           arch: x86_64
+          emulator-options: -no-window -gpu host -no-snapshot -noaudio -no-boot-anim
           disable-animations: true
           script: cd client && flutter test integration_test/android_login_smoke.dart --no-pub -d emulator-5554
       - name: Compile the exact release command with a disposable CI certificate
